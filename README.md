@@ -9,7 +9,7 @@ Leveraging Healthy Reference Panels and GWAS Findings*
 
 ---
 
-![scDCF workflow](docs/scDCF_workflow.png)
+![scDCF workflow](scDCF/docs/scDCF_workflow.png)
 
 > **Figure 1  –  scDCF analytical workflow.**  
 > GWAS-prioritised genes are paired with matched control genes and tested against a 1 000-cell healthy reference panel via Monte-Carlo difference-of-differences statistics, yielding disease-associated cells and enriched cell types.
