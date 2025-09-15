@@ -12,7 +12,7 @@ Leveraging Healthy Reference Panels and GWAS Findings*
 ![scDCF workflow](scDCF/docs/scDCF_workflow.png)
 
 > **Figure 1  –  scDCF analytical workflow.**  
-> GWAS-prioritised genes are paired with matched control genes and tested against a 1 000-cell healthy reference panel via Monte-Carlo difference-of-differences statistics, yielding disease-associated cells and enriched cell types.
+> MAGMA/TWAS-prioritized genes are matched with control genes and evaluated against library-size-matched healthy reference pools (1,000 nearest cells per target, 100 sampled per iteration). Monte Carlo difference-of-differences statistics, weighted by MAGMA Z-scores and aggregated via Fisher's method, identify disease-associated cells within annotated cell types.
 
 ---
 
@@ -22,10 +22,9 @@ Leveraging Healthy Reference Panels and GWAS Findings*
 3. [Installation](#3-installation)  
 4. [Quick Start](#4-quick-start)  
 5. [Datasets and Methods](#5-datasets-and-methods)  
-6. [Reproducing the Paper Results](#6-reproducing-the-paper-results)  
-7. [Citation](#7-citation)  
-8. [Contact](#8-contact)  
-9. [License](#9-license)
+6. [Data Sources](#6-data-sources)  
+7. [Contact](#7-contact)  
+8. [License](#8-license)
 
 ## 1. Introduction
 Genome-wide association studies (GWAS) have uncovered thousands of risk loci, but the cell types through which these variants act remain unclear. **scDCF (single-cell Disease Cell Finder)** integrates GWAS-derived gene sets with single-cell RNA-seq data, using a library-size-matched healthy reference panel, control-gene matching, and Monte-Carlo statistics to pinpoint cells whose expression profiles are genuinely perturbed by inherited risk.
@@ -33,12 +32,13 @@ Genome-wide association studies (GWAS) have uncovered thousands of risk loci, bu
 ## 2. Key Features
 | Capability | Summary |
 |------------|---------|
-| **Healthy-panel normalisation** | Controls intra-type transcriptional variability by conditioning on 1 000 matched healthy cells. |
-| **Control-gene matching** | Pairs each GWAS gene with 10 expression-profile-matched background genes. |
-| **Monte-Carlo difference-of-differences test** | Iteratively samples reference cells + control genes; one-tailed *t*-test → Fisher aggregation. |
-| **Cell-type enrichment** | Two-tailed Fisher's exact test on proportions of disease-associated cells. |
-| **Scalable & interpretable** | Python ≥ 3.9; Scanpy / Pandas stack; outputs tidy tables + UMAP & density plots. |
-| **Flexible gene sets** | Accepts MAGMA, TWAS, or any user-supplied list. |
+| **MAGMA/TWAS integration** | Transforms GWAS SNP statistics to gene-level Z-scores; intersects with expressed genes (G* = G ∩ E). |
+| **Library-size-matched reference pools** | Constructs 1,000-cell healthy reference pools per target cell; samples 100 cells per Monte Carlo iteration. |
+| **Cell-type-specific control matching** | Assigns 10 control genes per prioritized gene, matched on mean/variance within cell type and disease status. |
+| **Difference-of-differences framework** | Isolates disease signal via δ_target - δ_control, weighted by MAGMA Z-scores and averaged across genes. |
+| **Fisher meta-analysis** | Aggregates iteration-level p-values using Fisher's method; applies Benjamini-Hochberg FDR correction. |
+| **Cell-type enrichment testing** | Fisher's exact test on 2×2 contingency tables of significant cells vs. disease status per cell type. |
+| **Scalable implementation** | Python ≥ 3.9; optimized for sparse matrices; supports custom gene lists and flexible annotations. |
 
 ## 3. Installation
 ```bash
@@ -67,19 +67,36 @@ For detailed examples, see the [examples directory](examples/). Also see the met
 ### Command Line Usage
 
 ```bash
-# Run scDCF with basic parameters
-# You can now invoke the package directly:
-python -m scDCF --h5ad_file data/test/sim_adata.h5ad --gene_list_file data/test/genes.txt --output_dir results \
-                --celltype_column cell_type --disease_marker disease_numeric --rna_count_column nCount_RNA --iterations 2
+# Basic template - replace with your actual file paths and column names:
+python -m scDCF \
+  --h5ad_file YOUR_DATA.h5ad \                    # your AnnData file
+  --gene_list_file YOUR_GENES.txt \               # your MAGMA/TWAS gene list
+  --output_dir results/ \                         # output directory
+  --celltype_column YOUR_CELLTYPE_COLUMN \        # your data's cell type column
+  --disease_marker YOUR_DISEASE_COLUMN \          # your data's disease status column
+  --rna_count_column YOUR_RNA_COUNT_COLUMN        # your data's RNA count column
 
-# Or with your dataset:
-python -m scDCF --h5ad_file data.h5ad --gene_list_file genes.txt --output_dir results/
+# Example with real values:
+python -m scDCF \
+  --h5ad_file pbmc_data.h5ad \
+  --gene_list_file sle_magma_genes.txt \
+  --output_dir sle_results/ \
+  --celltype_column celltype_major \
+  --disease_marker disease_status \
+  --disease_value "SLE" \
+  --healthy_value "Control" \
+  --rna_count_column nCount_RNA \
+  --iterations 100
 
-# Run with additional options
-python -m scDCF --h5ad_file data.h5ad \
-                --csv_file magma_genes.csv \
-                --iterations 1000 \
-                --output_dir results/
+# Quick test with bundled synthetic data:
+python -m scDCF \
+  --h5ad_file data/test/sim_adata.h5ad \
+  --gene_list_file data/test/genes.txt \
+  --output_dir test_results/ \
+  --celltype_column cell_type \
+  --disease_marker disease_numeric \
+  --rna_count_column nCount_RNA \
+  --iterations 2
 ```
 
 #### Typical CLI recipes
@@ -204,22 +221,13 @@ The framework works with standard scRNA-seq datasets, but performs best with:
 ### Statistical Approach
 scDCF implements a rigorous statistical framework:
 
-1. **Control gene matching**: Each GWAS gene is matched to 10 control genes with similar expression properties
-2. **Monte Carlo sampling**: Repeated sampling from healthy reference panel
-3. **Difference-of-differences test**: Compares disease vs. healthy differential expression
-4. **Multiple testing correction**: FDR control for cell-type enrichment
+1. **Library-size matching**: Each target cell matched to 1,000 nearest healthy cells by RNA count; 100 sampled per Monte Carlo iteration
+2. **Control gene selection**: 10 control genes per prioritized gene, matched on mean/variance/CV within cell type and disease status
+3. **Difference-of-differences**: Target-reference differences minus control-reference differences, weighted by MAGMA Z-scores
+4. **Fisher meta-analysis**: Iteration-level p-values combined via Fisher's method; Benjamini-Hochberg FDR correction across cells
+5. **Cell-type enrichment**: Fisher's exact test on disease-associated cell proportions between patient and control groups
 
-## 6. Reproducing the Paper Results
-
-To reproduce the results from the paper, follow these steps:
-
-1. Ensure you have the necessary dependencies installed.
-2. Download the dataset from the specified GEO accession.
-3. Run the preprocessing pipeline to clean and annotate the data.
-4. Apply the scDCF framework to identify disease-associated cells.
-5. Interpret the results and create visualizations.
-
-### Data Sources
+## 6. Data Sources
 
 See [data/DATA_SOURCES.md](data/DATA_SOURCES.md) for information about the datasets used in scDCF analyses, including SLE, SJS, and CKD datasets with download links.
 
