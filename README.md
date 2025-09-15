@@ -51,15 +51,43 @@ pip install git+https://github.com/ZHANGCaicai581/scDCF.git
 
 ## 4. Quick Start
 
+### Python API
+
 ```python
 import scDCF
 import scanpy as sc
+import pandas as pd
 
 # Load preprocessed data
 adata = sc.read_h5ad("path/to/data.h5ad")
 
-# Prepare GWAS genes
-gwas_genes = ["GENE1", "GENE2", "GENE3", ...]  # or load from file
+# Load GWAS genes (from file or list)
+significant_genes_df = scDCF.read_gene_symbols("magma_genes.csv")  # CSV/TSV with gene names
+# Or from a plain text file:
+# significant_genes_df = scDCF.read_gene_symbols("genes.txt")
+
+# Generate control genes for a specific cell type
+disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
+    adata=adata,
+    significant_genes_df=significant_genes_df,
+    cell_type="T_cell",
+    cell_type_column="celltype_major"
+)
+
+# Run Monte Carlo analysis
+results = scDCF.monte_carlo_comparison(
+    adata=adata,
+    cell_type="T_cell",
+    cell_type_column="celltype_major",
+    significant_genes_df=significant_genes_df,
+    disease_control_genes=disease_ctrl,
+    healthy_control_genes=healthy_ctrl,
+    output_dir="results/",
+    iterations=10
+)
+
+# Organize final output
+organized_dir = scDCF.organize_output("results/", "organized_results/")
 ```
 
 For detailed examples, see the [examples directory](examples/). Also see the methods summary in [scDCF/docs/methods.md](scDCF/docs/methods.md).
