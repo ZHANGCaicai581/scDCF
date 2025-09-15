@@ -7,7 +7,7 @@ This folder documents the datasets used in the scDCF analyses. SLE data will be 
 - Peripheral blood mononuclear cells (PBMCs) from 41 disease samples and 18 controls
   - 33 childhood SLE (cSLE) patients, 11 healthy age-matched donors (cHD)
   - 8 adult SLE (aSLE) patients, 6 matched adult controls [18]
-- Status: to be uploaded by the author.
+- Status: Available locally (file too large for GitHub; contact author for access).
 
 ## SJS (Sjögren’s Syndrome)
 
