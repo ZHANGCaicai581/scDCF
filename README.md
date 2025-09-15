@@ -126,69 +126,6 @@ python -m scDCF \
   --iterations 2
 ```
 
-#### Typical CLI recipes
-
-```bash
-# 1) Use a CSV/TSV gene list file (auto-detect column)
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --output_dir results/
-
-# 2) Use a plain-text gene list (one gene per line)
-python -m scDCF \
-  --gene_list_file genes.txt \
-  --h5ad_file data.h5ad \
-  --output_dir results/
-
-# 3) Specify disease/healthy labels and cell type column
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --celltype_column celltype_major \
-  --disease_marker disease_numeric \
-  --disease_value 1 \
-  --healthy_value 0 \
-  --output_dir results/
-
-# 4) Limit to selected cell types and increase iterations
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --cell_types T_cell B_cell NK_cell \
-  --iterations 1000 \
-  --output_dir results/
-
-# 5) Reuse precomputed control genes (JSON) or save newly generated ones
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --control_genes_file control_genes.json \
-  --output_dir results/
-
-# or generate control genes and save them to a directory
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --control_genes_dir control_genes/ \
-  --output_dir results/
-
-# 6) Run a specific step only (e.g., post_analysis on existing results)
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --step post_analysis \
-  --iterations 1000 \
-  --output_dir results/
-
-# 7) Enable logs and progress bars
-python -m scDCF \
-  --csv_file magma_genes.csv \
-  --h5ad_file data.h5ad \
-  --log_file scDCF.log \
-  --show_progress \
-  --output_dir results/
-```
 
 ### Methods at a glance
 
@@ -216,6 +153,25 @@ For a concise overview, see the detailed methodology in `scDCF/docs/methods.md`.
 | `--step` | {`all`,`monte_carlo`,`post_analysis`} | `all` | Run full pipeline or a specific step only. |
 
 For the methodological details, see [scDCF/docs/methods.md](scDCF/docs/methods.md).
+
+#### Advanced CLI examples
+
+```bash
+# Use CSV gene list with custom columns
+python -m scDCF --csv_file magma_genes.csv --h5ad_file data.h5ad --output_dir results/
+
+# Specify cell types and increase iterations
+python -m scDCF --gene_list_file genes.txt --h5ad_file data.h5ad \
+                --cell_types T_cell B_cell --iterations 100 --output_dir results/
+
+# Reuse precomputed control genes
+python -m scDCF --csv_file genes.csv --h5ad_file data.h5ad \
+                --control_genes_file control_genes.json --output_dir results/
+
+# Run only post-analysis step
+python -m scDCF --gene_list_file genes.txt --h5ad_file data.h5ad \
+                --step post_analysis --output_dir results/
+```
 
 #### Quick test with bundled synthetic data
 
