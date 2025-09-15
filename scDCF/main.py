@@ -27,7 +27,6 @@ from scDCF.post_analysis import (
     combine_p_values_across_iterations,
     visualize_combined_p_values,
     perform_ks_test,
-    load_significant_cells,
     visualize_all_ks_results,
     organize_results
 )
@@ -223,9 +222,11 @@ def main():
         if args.step in ['all', 'post_analysis']:
             logging.info(f"Post-analysis for {cell_type}.")
 
-            # Load Monte Carlo results for both disease and healthy groups
-            disease_results = load_monte_carlo_results(args.output_dir, cell_type, 'disease', iterations=args.iterations)
-            healthy_results = load_monte_carlo_results(args.output_dir, cell_type, 'healthy', iterations=args.iterations)
+            # Load Monte Carlo results for both disease and healthy groups (by file path)
+            disease_file = os.path.join(args.output_dir, cell_type, f"{cell_type}_disease_monte_carlo_results.csv")
+            healthy_file = os.path.join(args.output_dir, cell_type, f"{cell_type}_healthy_monte_carlo_results.csv")
+            disease_results = load_monte_carlo_results(disease_file)
+            healthy_results = load_monte_carlo_results(healthy_file)
 
             # Check if either dataset is empty before proceeding
             if disease_results.empty or healthy_results.empty:

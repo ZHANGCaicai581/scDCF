@@ -17,12 +17,8 @@ def get_trait_association_scores(output_dir, cell_type):
     
     logging.info(f"Calculating trait association scores for {cell_type}")
     
-    # Print exact file paths being searched
-    disease_file = os.path.join(output_dir, f"{cell_type}_disease_combined.csv")
-    healthy_file = os.path.join(output_dir, f"{cell_type}_healthy_combined.csv")
-    
-    logging.info(f"Looking for disease file at: {os.path.abspath(disease_file)}")
-    logging.info(f"Looking for healthy file at: {os.path.abspath(healthy_file)}")
+    # Note: Combined p-values are saved per cell-type directory by post_analysis.
+    # We'll search multiple filename patterns to maximize compatibility.
     
     # Define contexts to analyze
     contexts = ['disease', 'healthy']
@@ -43,11 +39,22 @@ def get_trait_association_scores(output_dir, cell_type):
     
     # Process each context (disease/healthy)
     for context in contexts:
-        # Load combined p-values file
-        combined_file = os.path.join(cell_type_dir, f"{context}_combined_p_values.csv")
-        
-        if not os.path.exists(combined_file):
+        # Candidate file patterns (ordered by preference)
+        candidate_files = [
+            os.path.join(cell_type_dir, f"{context}_combined_p_values.csv"),
+            os.path.join(cell_type_dir, f"{cell_type}_{context}_combined.csv"),
+            os.path.join(output_dir, f"{cell_type}_{context}_combined.csv"),  # legacy top-level
+        ]
+
+        combined_file = None
+        for path in candidate_files:
+            if os.path.exists(path):
+                combined_file = path
+                break
+
+        if combined_file is None:
             logging.warning(f"Combined p-values file not found for {context} in {cell_type}")
+            logging.info(f"Searched candidates: {[os.path.abspath(p) for p in candidate_files]}")
             continue
         
         # Load data
