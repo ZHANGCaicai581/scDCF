@@ -180,7 +180,7 @@ For a concise overview, see the detailed methodology in `scDCF/docs/methods.md`.
 | `--disease_value` | (str|int|float) | `1` | Value indicating disease cells. |
 | `--healthy_value` | (str|int|float) | `0` | Value indicating healthy cells. |
 | `--rna_count_column` | str | `nCount_RNA` | Column in `adata.obs` for library size / RNA counts. |
-| `--iterations` | int | `10` | Number of Monte Carlo iterations (default 10 is suitable for quick runs; use 100+ for publication). |
+| `--iterations` | int | `10` | Number of Monte Carlo iterations. |
 | `--show_progress` | flag | `False` | Show per-iteration progress bar. |
 | `--log_file` | path | None | Optional log file path. |
 | `--control_genes_file` | path | None | JSON file with precomputed control genes. |
