@@ -11,9 +11,6 @@ Leveraging Healthy Reference Panels and GWAS Findings*
 
 ![scDCF workflow](scDCF/docs/scDCF_workflow.png)
 
-> **Figure 1  –  scDCF analytical workflow.**  
-> MAGMA/TWAS-prioritized genes are matched with control genes and evaluated against library-size-matched healthy reference pools (1,000 nearest cells per target, 100 sampled per iteration). Monte Carlo difference-of-differences statistics, weighted by MAGMA Z-scores and aggregated via Fisher's method, identify disease-associated cells within annotated cell types.
-
 ---
 
 ## Table of Contents
