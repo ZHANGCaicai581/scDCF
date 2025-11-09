@@ -65,24 +65,24 @@ adata = sc.read_h5ad("path/to/data.h5ad")
 # 2. Load GWAS/MAGMA prioritized genes
 significant_genes_df = scDCF.read_gene_symbols("genes.txt")  # One gene per line
 
-# 3. Generate control genes (matched on expression within cell type)
+# 3. Generate control genes (10 per significant gene, matched on expression)
 disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
-    adata=adata,
-    significant_genes_df=significant_genes_df,
-    cell_type="T_cell",
-    cell_type_column="celltype_major"
+    adata=adata,                          # Your AnnData object
+    significant_genes_df=significant_genes_df,  # GWAS genes
+    cell_type="T_cell",                   # Cell type to analyze
+    cell_type_column="celltype_major"     # Column with cell type labels
 )
 
-# 4. Run Monte Carlo analysis (default: 10 iterations, ~1 hour for 10K cells)
+# 4. Run Monte Carlo analysis
 results = scDCF.monte_carlo_comparison(
-    adata=adata,
-    cell_type="T_cell",
-    cell_type_column="celltype_major",
-    significant_genes_df=significant_genes_df,
-    disease_control_genes=disease_ctrl,
-    healthy_control_genes=healthy_ctrl,
-    output_dir="results/",
-    iterations=10
+    adata=adata,                          # Your AnnData object
+    cell_type="T_cell",                   # Cell type to analyze
+    cell_type_column="celltype_major",    # Column with cell type labels
+    significant_genes_df=significant_genes_df,  # GWAS genes
+    disease_control_genes=disease_ctrl,   # From step 3
+    healthy_control_genes=healthy_ctrl,   # From step 3
+    output_dir="results/",                # Where to save results
+    iterations=10                         # Number of iterations (default: 10)
 )
 
 # Optional: Use parallel processing for 4-8x speedup (recommended for ≥10 iterations)

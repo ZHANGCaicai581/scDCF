@@ -488,3 +488,6 @@ def compare_groups(disease_df, healthy_df):
     logging.info(f"Comparison completed: {comparison_results}")
     return comparison_results
 
+# Alias for backward compatibility
+monte_carlo_comparison = monte_carlo_comparison_optimized
+
