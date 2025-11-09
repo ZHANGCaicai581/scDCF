@@ -21,7 +21,10 @@ from scDCF.utils import (
     load_control_genes
 )
 from scDCF.control_genes import generate_control_genes
-from scDCF.analysis import monte_carlo_comparison
+try:
+    from scDCF.parallel import auto_monte_carlo as monte_carlo_comparison
+except ImportError:
+    from scDCF.analysis import monte_carlo_comparison
 from scDCF.post_analysis import (
     load_monte_carlo_results,
     combine_p_values_across_iterations,

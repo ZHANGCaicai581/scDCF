@@ -85,11 +85,24 @@ results = scDCF.monte_carlo_comparison(
     iterations=10                         # Number of iterations (default: 10)
 )
 
-# Optional: Use parallel processing for 4-8x speedup (recommended for ≥10 iterations)
-# results = scDCF.auto_monte_carlo(..., iterations=100)
+# Optional: Add cell metadata to results (get celltype, sample, batch, etc.)
+enhanced = scDCF.add_cell_metadata(results, adata)
+enhanced.to_csv("results_with_metadata.csv")
+```
 
-# Optional: Add cell metadata to results
-# enhanced = scDCF.add_cell_metadata(results, adata)
+**For faster analysis** (recommended for 100+ iterations):
+```python
+# Automatic parallel processing (4-8x speedup on multi-core systems)
+results = scDCF.auto_monte_carlo(
+    adata=adata,
+    cell_type="T_cell",
+    cell_type_column="celltype_major",
+    significant_genes_df=significant_genes_df,
+    disease_control_genes=disease_ctrl,
+    healthy_control_genes=healthy_ctrl,
+    output_dir="results/",
+    iterations=100  # Automatically uses parallel when beneficial
+)
 ```
 
 For detailed examples, see the [examples directory](examples/). Also see the methods summary in [scDCF/docs/methods.md](scDCF/docs/methods.md).
