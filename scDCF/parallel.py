@@ -91,7 +91,7 @@ def _worker_single_iteration(iteration_num, adata_path, genes_df, disease_ctrl, 
 def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, significant_genes_df,
                                    disease_control_genes=None, healthy_control_genes=None,
                                    output_dir=".", rna_count_column='nCount_RNA',
-                                   iterations=100, target_group="disease",
+                                   iterations=10, target_group="disease",
                                    disease_marker='disease_numeric',
                                    disease_value=1, healthy_value=0,
                                    n_workers=None, batch_size=500, show_progress=True):
@@ -249,7 +249,7 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
 # Convenience function
 def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
                     disease_control_genes, healthy_control_genes, output_dir,
-                    iterations=100, use_parallel=True, **kwargs):
+                    iterations=10, use_parallel=True, **kwargs):
     """
     Automatically choose between serial and parallel execution.
     

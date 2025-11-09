@@ -183,7 +183,7 @@ def _preextract_expression_matrices(target_cells, reference_cells, valid_genes,
 def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, significant_genes_df, 
                                     disease_control_genes=None, healthy_control_genes=None, 
                                     output_dir=".", rna_count_column='nCount_RNA', 
-                                    iterations=100, target_group="disease", 
+                                    iterations=10, target_group="disease", 
                                     disease_marker='disease_numeric', 
                                     disease_value=1, healthy_value=0, show_progress=False,
                                     batch_size=BATCH_SIZE):
