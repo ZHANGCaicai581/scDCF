@@ -1,4 +1,4 @@
-open# scDCF
+# scDCF
 
 *A Framework for Detecting Disease-associated Cells in Single-cell RNA-seq  
 Leveraging Healthy Reference Panels and GWAS Findings*
@@ -39,12 +39,17 @@ Genome-wide association studies (GWAS) have uncovered thousands of risk loci, bu
 
 ## 3. Installation
 ```bash
-# Stable release
+# Install from PyPI (recommended)
 pip install scDCF
 
-# Development (latest) version
+# Or install latest from GitHub
 pip install git+https://github.com/ZHANGCaicai581/scDCF.git
+
+# Verify installation
+python -c "import scDCF; print(f'scDCF version: {scDCF.__version__}')"
 ```
+
+**Requirements**: Python ≥ 3.9
 
 ## 4. Quick Start
 
@@ -82,6 +87,12 @@ results = scDCF.monte_carlo_comparison(
     output_dir="results/",
     iterations=10
 )
+
+# For faster analysis (4-8x speedup), use parallel processing:
+# results = scDCF.auto_monte_carlo(..., iterations=100)
+
+# Add cell metadata (optional)
+# enhanced = scDCF.add_cell_metadata(results, adata)
 
 # Organize final output
 organized_dir = scDCF.organize_output("results/", "organized_results/")
