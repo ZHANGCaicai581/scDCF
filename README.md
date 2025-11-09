@@ -58,17 +58,14 @@ python -c "import scDCF; print(f'scDCF version: {scDCF.__version__}')"
 ```python
 import scDCF
 import scanpy as sc
-import pandas as pd
 
-# Load preprocessed data
+# 1. Load your preprocessed scRNA-seq data
 adata = sc.read_h5ad("path/to/data.h5ad")
 
-# Load GWAS genes (from file or list)
-significant_genes_df = scDCF.read_gene_symbols("magma_genes.csv")  # CSV/TSV with gene names
-# Or from a plain text file:
-# significant_genes_df = scDCF.read_gene_symbols("genes.txt")
+# 2. Load GWAS/MAGMA prioritized genes
+significant_genes_df = scDCF.read_gene_symbols("genes.txt")  # One gene per line
 
-# Generate control genes for a specific cell type
+# 3. Generate control genes (matched on expression within cell type)
 disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
     adata=adata,
     significant_genes_df=significant_genes_df,
@@ -76,7 +73,7 @@ disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
     cell_type_column="celltype_major"
 )
 
-# Run Monte Carlo analysis
+# 4. Run Monte Carlo analysis (default: 10 iterations, ~1 hour for 10K cells)
 results = scDCF.monte_carlo_comparison(
     adata=adata,
     cell_type="T_cell",
@@ -88,14 +85,11 @@ results = scDCF.monte_carlo_comparison(
     iterations=10
 )
 
-# For faster analysis (4-8x speedup), use parallel processing:
+# Optional: Use parallel processing for 4-8x speedup (recommended for ≥10 iterations)
 # results = scDCF.auto_monte_carlo(..., iterations=100)
 
-# Add cell metadata (optional)
+# Optional: Add cell metadata to results
 # enhanced = scDCF.add_cell_metadata(results, adata)
-
-# Organize final output
-organized_dir = scDCF.organize_output("results/", "organized_results/")
 ```
 
 For detailed examples, see the [examples directory](examples/). Also see the methods summary in [scDCF/docs/methods.md](scDCF/docs/methods.md).
