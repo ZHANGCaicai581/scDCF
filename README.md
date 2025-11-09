@@ -102,28 +102,32 @@ For detailed examples, see the [examples directory](examples/). Also see the met
 
 ### Command Line Usage
 
+**Basic usage** (replace with your file paths):
 ```bash
-# Basic template - replace with your actual file paths and column names:
 python -m scDCF \
-  --h5ad_file YOUR_DATA.h5ad \                    # your AnnData file
-  --gene_list_file YOUR_GENES.txt \               # your MAGMA/TWAS gene list
-  --output_dir results/ \                         # output directory
-  --celltype_column YOUR_CELLTYPE_COLUMN \        # your data's cell type column
-  --disease_marker YOUR_DISEASE_COLUMN \          # your data's disease status column
-  --rna_count_column YOUR_RNA_COUNT_COLUMN        # your data's RNA count column
+  --h5ad_file YOUR_DATA.h5ad \
+  --gene_list_file YOUR_GENES.txt \
+  --output_dir results/ \
+  --celltype_column YOUR_CELLTYPE_COLUMN \
+  --disease_marker YOUR_DISEASE_COLUMN \
+  --rna_count_column YOUR_RNA_COUNT_COLUMN
+```
 
-# Example with real values (uses default 10 iterations):
+**Example with real data** (uses default 10 iterations):
+```bash
 python -m scDCF \
   --h5ad_file pbmc_data.h5ad \
-  --gene_list_file sle_magma_genes.txt \
-  --output_dir sle_results/ \
+  --gene_list_file sle_genes.txt \
+  --output_dir results/ \
   --celltype_column celltype_major \
   --disease_marker disease_status \
   --disease_value "SLE" \
   --healthy_value "Control" \
   --rna_count_column nCount_RNA
+```
 
-# Quick test with bundled synthetic data:
+**Quick test** (bundled synthetic data, completes in ~5 min):
+```bash
 python -m scDCF \
   --h5ad_file data/test/sim_adata.h5ad \
   --gene_list_file data/test/genes.txt \
