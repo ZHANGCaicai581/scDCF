@@ -145,5 +145,3 @@ def save_results(df, output_file):
         logging.error(f"Failed to create directory {output_dir}: {e}")
     except Exception as e:
         logging.error(f"Error saving results to {output_file}: {e}") 
-
-plt.xlabel('Combined P-value (Fisher\'s Method)') 

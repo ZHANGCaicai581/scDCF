@@ -14,7 +14,7 @@ import scipy.sparse as sp
 logger = logging.getLogger(__name__)
 
 def generate_control_genes(adata, significant_genes_df, cell_type, cell_type_column, 
-                          n_control_genes=5, disease_marker='disease_numeric', 
+                          n_control_genes=10, disease_marker='disease_numeric', 
                           disease_value=1, healthy_value=0, output_dir=None):
     """
     Generate control genes for differential correlation analysis.
@@ -71,14 +71,18 @@ def generate_control_genes(adata, significant_genes_df, cell_type, cell_type_col
     # Calculate mean expression for disease and healthy cells
     if sp.issparse(disease_adata.X):
         disease_means = disease_adata.X.mean(axis=0).A1
-        disease_vars = disease_adata.X.var(axis=0).A1
+        # Calculate variance manually for sparse matrices: var = E[X²] - E[X]²
+        disease_squared_means = disease_adata.X.power(2).mean(axis=0).A1
+        disease_vars = disease_squared_means - disease_means**2
     else:
         disease_means = disease_adata.X.mean(axis=0)
         disease_vars = disease_adata.X.var(axis=0)
     
     if sp.issparse(healthy_adata.X):
         healthy_means = healthy_adata.X.mean(axis=0).A1
-        healthy_vars = healthy_adata.X.var(axis=0).A1
+        # Calculate variance manually for sparse matrices: var = E[X²] - E[X]²
+        healthy_squared_means = healthy_adata.X.power(2).mean(axis=0).A1
+        healthy_vars = healthy_squared_means - healthy_means**2
     else:
         healthy_means = healthy_adata.X.mean(axis=0)
         healthy_vars = healthy_adata.X.var(axis=0)

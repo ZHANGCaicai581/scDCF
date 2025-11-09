@@ -1,0 +1,10 @@
+{
+  "disease": [
+    "GENE1",
+    "GENE2"
+  ],
+  "healthy": [
+    "GENE3",
+    "GENE4"
+  ]
+}
