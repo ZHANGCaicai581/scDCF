@@ -9,10 +9,10 @@ import scDCF
 import scanpy as sc
 
 # ============================================================================
-# Example 1: Auto Mode (Recommended for Most Users)
+# Example 1: Default Serial Mode (Out-of-the-box behavior)
 # ============================================================================
 print("=" * 80)
-print("Example 1: Auto Mode (Easiest)")
+print("Example 1: Default Serial Mode (Easiest)")
 print("=" * 80)
 
 # Load your data
@@ -28,7 +28,6 @@ disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
     n_control_genes=10
 )
 
-# Auto Monte Carlo - automatically uses parallel when beneficial!
 results = scDCF.auto_monte_carlo(
     adata=adata,
     cell_type="T_cell",
@@ -37,7 +36,7 @@ results = scDCF.auto_monte_carlo(
     disease_control_genes=disease_ctrl,
     healthy_control_genes=healthy_ctrl,
     output_dir="results/",
-    iterations=100  # Automatically parallel (fast!)
+    iterations=10  # Serial by default
 )
 
 print(f"✅ Analysis complete! Analyzed {len(results)} cells")
@@ -46,11 +45,11 @@ print(f"✅ Analysis complete! Analyzed {len(results)} cells")
 # Example 2: Explicit Parallel (Advanced Users)
 # ============================================================================
 print("\n" + "=" * 80)
-print("Example 2: Explicit Parallel Control")
+print("Example 2: Enable Parallel Processing")
 print("=" * 80)
 
-# Run with specific number of workers
-disease_results = scDCF.parallel_monte_carlo_comparison(
+# Run with auto_monte_carlo in parallel mode (auto-select workers)
+parallel_results = scDCF.auto_monte_carlo(
     adata=adata,
     cell_type="T_cell",
     cell_type_column="celltype_major",
@@ -59,11 +58,11 @@ disease_results = scDCF.parallel_monte_carlo_comparison(
     healthy_control_genes=healthy_ctrl,
     output_dir="results/",
     iterations=100,
-    target_group="disease",
-    n_workers=8,  # Use 8 cores explicitly
-    show_progress=True
+    use_parallel=True,      # enable parallel processing
+    target_group="disease"
 )
 
+# Run with a specific worker count
 healthy_results = scDCF.parallel_monte_carlo_comparison(
     adata=adata,
     cell_type="T_cell",
@@ -74,11 +73,11 @@ healthy_results = scDCF.parallel_monte_carlo_comparison(
     output_dir="results/",
     iterations=100,
     target_group="healthy",
-    n_workers=8,
+    n_workers=4,            # use 4 cores explicitly
     show_progress=True
 )
 
-print(f"✅ Disease: {len(disease_results)} cells analyzed")
+print(f"✅ Disease: {len(parallel_results)} cells analyzed")
 print(f"✅ Healthy: {len(healthy_results)} cells analyzed")
 
 # ============================================================================
@@ -136,7 +135,7 @@ parallel_results = scDCF.parallel_monte_carlo_comparison(
     healthy_control_genes=healthy_ctrl,
     output_dir="results/parallel/",
     iterations=3,
-    n_workers=None  # Auto-detect
+    n_workers=None  # Auto-detect (≤ min(CPUs-1, 8))
 )
 parallel_time = time.time() - start
 
@@ -162,18 +161,18 @@ disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
 )
 
 # 3. Run parallel analysis (both groups)
-print("Running disease group...")
+print("Running disease group (parallel)...")
 disease_results = scDCF.auto_monte_carlo(
     adata, "T_cell", "celltype_major", genes_df,
     disease_ctrl, healthy_ctrl, "results/",
-    iterations=100, target_group="disease"
+    iterations=100, target_group="disease", use_parallel=True
 )
 
-print("Running healthy group...")
+print("Running healthy group (parallel)...")
 healthy_results = scDCF.auto_monte_carlo(
     adata, "T_cell", "celltype_major", genes_df,
     disease_ctrl, healthy_ctrl, "results/",
-    iterations=100, target_group="healthy"
+    iterations=100, target_group="healthy", use_parallel=True
 )
 
 # 4. Post-analysis
@@ -184,13 +183,16 @@ healthy_combined = scDCF.combine_p_values_across_iterations(
     healthy_results, "results/", "T_cell", "healthy"
 )
 
-# 5. KS test
-ks_results = scDCF.perform_ks_test(
-    disease_combined, healthy_combined, "T_cell", "results/"
+# 5. Final per-cell summary (writes T_cell_final_summary.csv)
+final_summary = scDCF.export_final_celltype_summary(
+    cell_type="T_cell",
+    disease_combined=disease_combined,
+    healthy_combined=healthy_combined,
+    output_dir="results/"
 )
 
-print(f"\n✅ Complete workflow finished!")
-print(f"KS p-value: {ks_results['KS P-value'].values[0]:.6f}")
+print("\n✅ Complete workflow finished!")
+print(f"Final summary saved to results/T_cell/T_cell_final_summary.csv with {len(final_summary)} rows")
 
 # ============================================================================
 # Tips for Users
@@ -200,11 +202,10 @@ print("💡 Tips for Best Performance")
 print("=" * 80)
 
 print("""
-1. Use auto_monte_carlo() for automatic optimization
-   - Automatically uses parallel when beneficial
-   - No configuration needed
+1. Use auto_monte_carlo() with `use_parallel=True` for multi-core speedups.
+   - Without the flag it stays single-core (predictable resource usage).
 
-2. For 100+ iterations, always use parallel
+2. For 100+ iterations, enabling parallel mode is strongly recommended.
    - 5-10x faster on typical machines
    - Saves hours of computation time
 
@@ -213,9 +214,9 @@ print("""
    print(f"CPU cores: {mp.cpu_count()}")
 
 4. Adjust workers for your hardware:
-   n_workers=None  # Auto (recommended)
+   n_workers=None  # Auto (capped at ≤ min(CPUs-1, 8))
    n_workers=4     # Specific number
-   n_workers=mp.cpu_count()  # Use all cores
+   n_workers=mp.cpu_count()  # Use all cores (consider reserving 1-2 cores)
 
 5. Trade-offs:
    - More workers = faster (up to # of cores)

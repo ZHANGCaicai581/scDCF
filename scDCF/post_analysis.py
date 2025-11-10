@@ -4,176 +4,10 @@ import os
 import pandas as pd
 import numpy as np
 import logging
-import json
-from scipy.stats import combine_pvalues, ks_2samp
+from scipy.stats import combine_pvalues, norm
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-def test_post_analysis():
-    """Test the post_analysis module of scDCF"""
-    try:
-        import scDCF
-        logging.info("Testing post_analysis module...")
-        
-        # Check if we have test results to analyze
-        cell_types = ['T_cell', 'B_cell', 'NK_cell']
-        results_exist = False
-        
-        for cell_type in cell_types:
-            disease_file = f"test_output/{cell_type}/{cell_type}_disease_monte_carlo_results.csv"
-            healthy_file = f"test_output/{cell_type}/{cell_type}_healthy_monte_carlo_results.csv"
-            
-            if os.path.exists(disease_file) and os.path.exists(healthy_file):
-                results_exist = True
-                logging.info(f"Found existing results for {cell_type}")
-                
-                # Load results
-                disease_results = scDCF.post_analysis.load_monte_carlo_results(disease_file)
-                healthy_results = scDCF.post_analysis.load_monte_carlo_results(healthy_file)
-                
-                if not disease_results.empty and not healthy_results.empty:
-                    # Test combine_p_values_across_iterations
-                    logging.info(f"Combining p-values for {cell_type}")
-                    disease_combined = scDCF.post_analysis.combine_p_values_across_iterations(
-                        disease_results, 
-                        output_dir="test_output",
-                        cell_type=cell_type, 
-                        target_group="disease"
-                    )
-                    
-                    healthy_combined = scDCF.post_analysis.combine_p_values_across_iterations(
-                        healthy_results, 
-                        output_dir="test_output",
-                        cell_type=cell_type, 
-                        target_group="healthy"
-                    )
-                    
-                    # Test visualization
-                    logging.info(f"Testing visualization for {cell_type}")
-                    scDCF.post_analysis.visualize_combined_p_values(
-                        disease_combined, 
-                        healthy_combined,
-                        cell_type, 
-                        output_dir=f"test_output/{cell_type}"
-                    )
-                    
-                    # Test KS test
-                    logging.info(f"Performing KS test for {cell_type}")
-                    ks_results = scDCF.post_analysis.perform_ks_test(
-                        disease_combined, 
-                        healthy_combined,
-                        cell_type, 
-                        output_dir="test_output"
-                    )
-                    
-                    logging.info(f"KS test results for {cell_type}: {ks_results.to_dict(orient='records')}")
-        
-        if not results_exist:
-            logging.warning("No test results found. Run the main test script first.")
-            return False
-        
-        # Test combining KS results
-        ks_results_files = [f"test_output/{cell_type}/{cell_type}_ks_test_results.csv" 
-                          for cell_type in cell_types 
-                          if os.path.exists(f"test_output/{cell_type}/{cell_type}_ks_test_results.csv")]
-        
-        if ks_results_files:
-            ks_results_list = [pd.read_csv(file) for file in ks_results_files]
-            if ks_results_list:
-                logging.info("Testing visualization of all KS results")
-                scDCF.post_analysis.visualize_all_ks_results(
-                    ks_results_list, 
-                    output_dir="test_output"
-                )
-        
-        logging.info("Post-analysis tests completed successfully!")
-        return True
-        
-    except Exception as e:
-        logging.error(f"Error in post_analysis test: {e}")
-        import traceback
-        logging.error(traceback.format_exc())
-        return False
-
-def test_trait_association(trait_file=None):
-    """Test the trait_association module of scDCF"""
-    try:
-        import scDCF
-        
-        # Create test trait data if not provided
-        if trait_file is None or not os.path.exists(trait_file):
-            logging.info("Creating simulated trait data...")
-            # Generate sample trait data
-            cell_types = ['T_cell', 'B_cell', 'NK_cell']
-            traits = ['age', 'gender', 'severity_score', 'treatment_response']
-            
-            trait_data = []
-            for cell_type in cell_types:
-                for trait in traits:
-                    # Sample correlation value
-                    correlation = np.random.uniform(-0.8, 0.8)
-                    p_value = np.random.uniform(0, 0.1)
-                    
-                    trait_data.append({
-                        'cell_type': cell_type,
-                        'trait': trait,
-                        'correlation': correlation,
-                        'p_value': p_value,
-                        'sample_size': np.random.randint(20, 100)
-                    })
-            
-            trait_df = pd.DataFrame(trait_data)
-            trait_file = "test_output/simulated_trait_data.csv"
-            trait_df.to_csv(trait_file, index=False)
-            logging.info(f"Simulated trait data saved to {trait_file}")
-        
-        # Check if trait_association module exists
-        if hasattr(scDCF, 'trait_association'):
-            logging.info("Testing trait_association module...")
-            
-            # Read trait data
-            trait_data = pd.read_csv(trait_file)
-            
-            # Check for various functions
-            if hasattr(scDCF.trait_association, 'correlate_with_traits'):
-                cell_types = trait_data['cell_type'].unique()
-                for cell_type in cell_types:
-                    # Find KS results for this cell type
-                    ks_file = f"test_output/{cell_type}/{cell_type}_ks_test_results.csv"
-                    if os.path.exists(ks_file):
-                        ks_results = pd.read_csv(ks_file)
-                        
-                        # Get trait data for this cell type
-                        cell_traits = trait_data[trait_data['cell_type'] == cell_type]
-                        
-                        # Test trait correlation
-                        trait_corr = scDCF.trait_association.correlate_with_traits(
-                            ks_results, 
-                            cell_traits,
-                            output_dir=f"test_output/{cell_type}"
-                        )
-                        
-                        logging.info(f"Trait correlation for {cell_type}: {trait_corr.head()}")
-            
-            if hasattr(scDCF.trait_association, 'plot_trait_correlations'):
-                logging.info("Testing trait correlation visualization...")
-                scDCF.trait_association.plot_trait_correlations(
-                    trait_data, 
-                    output_dir="test_output"
-                )
-            
-            logging.info("Trait association tests completed!")
-            return True
-        else:
-            logging.warning("trait_association module not found in scDCF package.")
-            return False
-            
-    except Exception as e:
-        logging.error(f"Error in trait_association test: {e}")
-        import traceback
-        logging.error(traceback.format_exc())
-        return False
 
 def load_monte_carlo_results(results_file):
     """
@@ -217,7 +51,7 @@ def combine_p_values_across_iterations(combined_results, output_dir, cell_type, 
     
     # Determine gene column name - try different possible names
     gene_column = None
-    possible_gene_columns = ['gene', 'gene_name', 'significant_gene', 'sig_gene']
+    possible_gene_columns = ['cell_id', 'gene', 'gene_name', 'significant_gene', 'sig_gene']
     
     for col in possible_gene_columns:
         if col in combined_results.columns:
@@ -315,6 +149,8 @@ def combine_p_values_across_iterations(combined_results, output_dir, cell_type, 
     
     # Create DataFrame from combined p-values
     combined_p_values_df = pd.DataFrame(combined_p_values)
+    if not combined_p_values_df.empty and 'gene' in combined_p_values_df.columns and 'cell_id' not in combined_p_values_df.columns:
+        combined_p_values_df = combined_p_values_df.rename(columns={'gene': 'cell_id'})
     
     # Save combined p-values
     combined_p_values_file = os.path.join(output_dir_cell_type, f"{cell_type}_{target_group}_combined.csv")
@@ -324,72 +160,76 @@ def combine_p_values_across_iterations(combined_results, output_dir, cell_type, 
     return combined_p_values_df
 
 def visualize_combined_p_values(disease_combined, healthy_combined, cell_type, output_dir='.'):
-    """Simplified version that logs instead of plotting"""
+    """Placeholder visualization hook (disabled)."""
     logging.info(f"Visualization skipped for {cell_type} (plotting disabled)")
-    
-    # Optional: Still save the data for later visualization
-    import os
-    os.makedirs(output_dir, exist_ok=True)
-    
-    disease_combined.to_csv(os.path.join(output_dir, f"{cell_type}_disease_combined.csv"), index=False)
-    healthy_combined.to_csv(os.path.join(output_dir, f"{cell_type}_healthy_combined.csv"), index=False)
-    
     return
 
-def perform_ks_test(disease_combined, healthy_combined, cell_type, output_dir):
+
+def export_final_celltype_summary(cell_type, disease_combined, healthy_combined,
+                                  output_dir,
+                                  include_metadata=True, adata=None,
+                                  metadata_columns=None):
     """
-    Perform KS test on combined p-values.
+    Create a final per-cell-type summary CSV with key statistics.
 
-    Args:
-        disease_combined (pd.DataFrame): Combined p-values for disease group.
-        healthy_combined (pd.DataFrame): Combined p-values for healthy group.
-        cell_type (str): Cell type identifier.
-        output_dir (str): Directory to save results.
-
-    Returns:
-        pd.DataFrame: DataFrame containing KS test results.
+    The summary includes combined p-values, derived statistics, and (by default)
+    AnnData metadata so researchers have a single file to inspect.
     """
-    output_dir_cell_type = os.path.join(output_dir, cell_type)
-    os.makedirs(output_dir_cell_type, exist_ok=True)
-    
-    ks_stat, ks_pvalue = ks_2samp(disease_combined['combined_p_value_fisher'], 
-                                   healthy_combined['combined_p_value_fisher'])
-    
-    logging.info(f"KS test result for {cell_type}: Statistic={ks_stat}, P-value={ks_pvalue}")
+    cell_dir = os.path.join(output_dir, cell_type)
+    os.makedirs(cell_dir, exist_ok=True)
 
-    # Save KS test results
-    ks_results_df = pd.DataFrame({
-        'Cell Type': [cell_type],
-        'KS Statistic': [ks_stat],
-        'KS P-value': [ks_pvalue],
-        'p_value': [ks_pvalue],
-        'ks_statistic': [ks_stat]
-    })
-    
-    ks_results_file = os.path.join(output_dir_cell_type, f"{cell_type}_ks_test_results.csv")
-    ks_results_df.to_csv(ks_results_file, index=False)
-    logging.info(f"KS test results saved to {ks_results_file}")
+    frames = []
+    for group_name, df in [('disease', disease_combined), ('healthy', healthy_combined)]:
+        if df is None or df.empty:
+            continue
+        group_df = df.copy()
+        if 'gene' in group_df.columns and 'cell_id' not in group_df.columns:
+            group_df = group_df.rename(columns={'gene': 'cell_id'})
+        group_df['cell_id'] = group_df['cell_id'].astype(str)
+        group_df['target_group'] = group_df.get('target_group', group_name)
+        group_df['group'] = group_name
+        # Derived statistics
+        if 'combined_p_value_fisher' in group_df.columns:
+            group_df['combined_minus_log10_p'] = -np.log10(group_df['combined_p_value_fisher'].clip(lower=1e-300))
+            group_df['combined_fisher_z'] = norm.isf(group_df['combined_p_value_fisher'].clip(lower=1e-300) / 2)
+        if 'combined_p_value_stouffer' in group_df.columns:
+            group_df['combined_stouffer_z'] = norm.isf(group_df['combined_p_value_stouffer'].clip(lower=1e-300) / 2)
+        frames.append(group_df)
 
-    return ks_results_df
+    if not frames:
+        logging.warning(f"No combined results available for {cell_type}; final summary not generated.")
+        return pd.DataFrame()
 
-def visualize_all_ks_results(ks_results_list, output_dir):
-    """
-    Save KS test results for all cell types.
+    final_df = pd.concat(frames, ignore_index=True)
+    final_df['original_cell_id'] = final_df['cell_id']
 
-    Args:
-        ks_results_list (list of pd.DataFrame): List of DataFrames with KS test results.
-        output_dir (str): Directory to save the summary.
-    """
-    # Combine all KS results into one DataFrame
-    all_ks_results_df = pd.concat(ks_results_list, ignore_index=True)
-    
-    # Save the combined results
-    os.makedirs(output_dir, exist_ok=True)
-    summary_file = os.path.join(output_dir, "ks_test_summary.csv")
-    all_ks_results_df.to_csv(summary_file, index=False)
-    
-    logging.info(f"KS test summary saved to {summary_file}")
-    return all_ks_results_df
+    if include_metadata and adata is not None:
+        try:
+            from .cell_metadata import add_cell_metadata
+            final_df = add_cell_metadata(
+                final_df,
+                adata=adata,
+                cell_id_column='cell_id',
+                metadata_columns=metadata_columns
+            )
+        except Exception as exc:
+            logging.warning(f"Unable to append metadata for {cell_type}: {exc}")
+
+    columns_order = [
+        'cell_id', 'original_cell_id', 'group',
+        'combined_p_value_fisher', 'combined_p_value_stouffer',
+        'combined_minus_log10_p', 'combined_fisher_z', 'combined_stouffer_z',
+        'num_iterations', 'min_p_value', 'max_p_value', 'mean_p_value'
+    ]
+    existing_order = [col for col in columns_order if col in final_df.columns]
+    remaining_cols = [col for col in final_df.columns if col not in existing_order]
+    final_df = final_df[existing_order + remaining_cols]
+
+    final_path = os.path.join(cell_dir, f"{cell_type}_final_summary.csv")
+    final_df.to_csv(final_path, index=False)
+    logging.info(f"Final summary saved to {final_path} ({len(final_df)} rows).")
+
+    return final_df
 
 def examine_results_format(results_file):
     """
@@ -573,17 +413,3 @@ def organize_results(source_dir, dest_dir="output", cell_types=None):
     
     logging.info(f"Results organized in {dest_dir}/")
     return dest_dir
-
-if __name__ == "__main__":
-    # Test post-analysis
-    post_success = test_post_analysis()
-    logging.info(f"Post-analysis tests {'succeeded' if post_success else 'failed'}")
-    
-    # Test trait association
-    trait_success = test_trait_association()
-    logging.info(f"Trait association tests {'succeeded' if trait_success else 'failed'}")
-    
-    if post_success and trait_success:
-        logging.info("✅ All tests completed successfully!")
-    else:
-        logging.warning("⚠️ Some tests failed. See logs above for details.")

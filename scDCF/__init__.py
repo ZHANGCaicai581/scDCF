@@ -4,7 +4,12 @@ __version__ = '0.1.13'
 from .utils import read_gene_symbols
 from .control_genes import generate_control_genes
 from .analysis import monte_carlo_comparison
-from .post_analysis import load_monte_carlo_results, combine_p_values_across_iterations, visualize_combined_p_values, perform_ks_test, visualize_all_ks_results
+from .post_analysis import (
+    load_monte_carlo_results,
+    combine_p_values_across_iterations,
+    visualize_combined_p_values,
+    export_final_celltype_summary
+)
 from .trait_association import get_trait_association_scores
 
 # Cell metadata helpers (new in v0.1.13)

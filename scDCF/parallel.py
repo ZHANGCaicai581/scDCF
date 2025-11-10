@@ -152,13 +152,29 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
     
     logging.info(f"Starting parallel Monte Carlo analysis ({iterations} iterations)")
     
-    # Auto-detect workers
-    if n_workers is None:
-        n_workers = max(1, mp.cpu_count() - 1)
+    # Auto-detect workers (leave at least one core and cap for fairness)
+    total_cpus = mp.cpu_count() or 1
+    if n_workers is None or n_workers <= 0:
+        if total_cpus <= 2:
+            auto_workers = 1
+        else:
+            auto_workers = max(1, min(total_cpus - 1, 8))
+        n_workers = auto_workers
+        logging.info(
+            f"Auto-selected {n_workers} workers (total CPUs: {total_cpus}, cap=8, reserve=1)"
+        )
+    else:
+        n_workers = max(1, min(n_workers, total_cpus))
+        logging.info(
+            f"Using user-specified worker count: {n_workers} (total CPUs: {total_cpus})"
+        )
+
     n_workers = min(n_workers, iterations)  # Don't use more workers than iterations
+    if n_workers == 0:
+        n_workers = 1
     
-    logging.info(f"Using {n_workers} parallel workers (CPU cores: {mp.cpu_count()})")
-    logging.info(f"Expected speedup: ~{n_workers}x")
+    logging.info(f"Parallel worker pool size: {n_workers}")
+    logging.info(f"Expected speedup: up to ~{n_workers}x")
     
     # Save adata to temp file for workers
     temp_h5ad = tempfile.NamedTemporaryFile(suffix='.h5ad', delete=False)
@@ -249,11 +265,13 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
 # Convenience function
 def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
                     disease_control_genes, healthy_control_genes, output_dir,
-                    iterations=10, use_parallel=True, **kwargs):
+                    iterations=10, use_parallel=None, **kwargs):
     """
     Automatically choose between serial and parallel execution.
     
-    Uses parallel processing if iterations >= 3, otherwise uses serial.
+    Defaults to serial execution for predictable resource usage.
+    Parallel mode is enabled only when explicitly requested via
+    `use_parallel=True` or by providing `n_workers`.
     
     Args:
         use_parallel: Force parallel (True) or serial (False), or None for auto
@@ -263,21 +281,26 @@ def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
         DataFrame: Combined results
     """
     # Auto-detect
+    total_cpus = mp.cpu_count() or 1
+    n_workers = kwargs.pop('n_workers', None)
+
     if use_parallel is None:
-        use_parallel = iterations >= 3 and mp.cpu_count() > 1
+        # If user specified worker count we respect it and enable parallel,
+        # otherwise stay in serial mode by default.
+        use_parallel = n_workers is not None
     
     if use_parallel and iterations >= 2:
-        logging.info("Using parallel processing (faster)")
+        logging.info("Using parallel processing (auto-monte-carlo)")
         return parallel_monte_carlo_comparison(
             adata, cell_type, cell_type_column, significant_genes_df,
             disease_control_genes, healthy_control_genes, output_dir,
-            iterations=iterations, **kwargs
+            iterations=iterations, n_workers=n_workers, **kwargs
         )
-    else:
-        logging.info("Using serial processing")
-        return _monte_carlo_single(
-            adata, cell_type, cell_type_column, significant_genes_df,
-            disease_control_genes, healthy_control_genes, output_dir,
-            iterations=iterations, **kwargs
-        )
+
+    logging.info("Using serial processing (auto-monte-carlo)")
+    return _monte_carlo_single(
+        adata, cell_type, cell_type_column, significant_genes_df,
+        disease_control_genes, healthy_control_genes, output_dir,
+        iterations=iterations, **kwargs
+    )
 

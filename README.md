@@ -92,7 +92,7 @@ enhanced.to_csv("results_with_metadata.csv")
 
 **For faster analysis** (recommended for 100+ iterations):
 ```python
-# Automatic parallel processing (4-8x speedup on multi-core systems)
+# Enable parallel processing (4-8x speedup on multi-core systems)
 results = scDCF.auto_monte_carlo(
     adata=adata,
     cell_type="T_cell",
@@ -101,7 +101,8 @@ results = scDCF.auto_monte_carlo(
     disease_control_genes=disease_ctrl,
     healthy_control_genes=healthy_ctrl,
     output_dir="results/",
-    iterations=100  # Automatically uses parallel when beneficial
+    iterations=100,
+    use_parallel=True  # Set True to allow multi-core execution
 )
 ```
 
@@ -145,6 +146,8 @@ python -m scDCF \
   --iterations 2
 ```
 
+> **Note:** scDCF now runs Monte Carlo iterations serially by default (single core). Enable parallel mode with `--parallel` (auto-selects a capped worker pool, `≤ min(total CPUs - 1, 8)`) or specify `--parallel_workers N`. Use `--serial` to force single-core behavior explicitly.
+
 
 ### Methods at a glance
 
@@ -170,6 +173,9 @@ For a concise overview, see the detailed methodology in `scDCF/docs/methods.md`.
 | `--control_genes_file` | path | None | JSON file with precomputed control genes. |
 | `--control_genes_dir` | path | None | Directory to save newly generated control genes. |
 | `--step` | {`all`,`monte_carlo`,`post_analysis`} | `all` | Run full pipeline or a specific step only. |
+| `--parallel` | flag | `False` | Enable parallel execution with auto-selected worker pool. |
+| `--parallel_workers` | int | auto (≤ min(CPUs-1, 8)) | Limit worker processes for Monte Carlo iterations. |
+| `--serial` | flag | `False` | Force single-core execution (disables parallel pool). |
 
 For the methodological details, see [scDCF/docs/methods.md](scDCF/docs/methods.md).
 
@@ -179,9 +185,10 @@ For the methodological details, see [scDCF/docs/methods.md](scDCF/docs/methods.m
 # Use CSV gene list with custom columns
 python -m scDCF --csv_file magma_genes.csv --h5ad_file data.h5ad --output_dir results/
 
-# Specify cell types and increase iterations
+# Enable parallel processing with 4 workers
 python -m scDCF --gene_list_file genes.txt --h5ad_file data.h5ad \
-                --cell_types T_cell B_cell --iterations 100 --output_dir results/
+                --cell_types T_cell B_cell --iterations 100 --output_dir results/ \
+                --parallel --parallel_workers 4
 
 # Reuse precomputed control genes
 python -m scDCF --csv_file genes.csv --h5ad_file data.h5ad \
