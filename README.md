@@ -73,21 +73,48 @@ disease_ctrl, healthy_ctrl = scDCF.generate_control_genes(
     cell_type_column="celltype_major"     # Column with cell type labels
 )
 
-# 4. Run Monte Carlo analysis
-results = scDCF.monte_carlo_comparison(
-    adata=adata,                          # Your AnnData object
-    cell_type="T_cell",                   # Cell type to analyze
-    cell_type_column="celltype_major",    # Column with cell type labels
-    significant_genes_df=significant_genes_df,  # GWAS genes
-    disease_control_genes=disease_ctrl,   # From step 3
-    healthy_control_genes=healthy_ctrl,   # From step 3
-    output_dir="results/",                # Where to save results
-    iterations=10                         # Number of iterations (default: 10)
+# 4. Run Monte Carlo analysis (serial by default)
+disease_results = scDCF.monte_carlo_comparison(
+    adata=adata,
+    cell_type="T_cell",
+    cell_type_column="celltype_major",
+    significant_genes_df=significant_genes_df,
+    disease_control_genes=disease_ctrl,
+    healthy_control_genes=healthy_ctrl,
+    output_dir="results/",
+    iterations=10,
+    target_group="disease"
 )
 
-# Optional: Add cell metadata to results (get celltype, sample, batch, etc.)
-enhanced = scDCF.add_cell_metadata(results, adata)
-enhanced.to_csv("results_with_metadata.csv")
+healthy_results = scDCF.monte_carlo_comparison(
+    adata=adata,
+    cell_type="T_cell",
+    cell_type_column="celltype_major",
+    significant_genes_df=significant_genes_df,
+    disease_control_genes=disease_ctrl,
+    healthy_control_genes=healthy_ctrl,
+    output_dir="results/",
+    iterations=10,
+    target_group="healthy"
+)
+
+# 5. Combine iterations and create a final per-cell summary
+disease_combined = scDCF.combine_p_values_across_iterations(
+    disease_results, "results/", "T_cell", "disease"
+)
+healthy_combined = scDCF.combine_p_values_across_iterations(
+    healthy_results, "results/", "T_cell", "healthy"
+)
+
+final_summary = scDCF.export_final_celltype_summary(
+    cell_type="T_cell",
+    disease_combined=disease_combined,
+    healthy_combined=healthy_combined,
+    output_dir="results/",
+    adata=adata  # Metadata columns from adata.obs merged by default
+)
+final_summary.to_csv("results/T_cell/T_cell_final_summary.csv", index=False)
+# Use metadata_columns=["sample","batch"] if you only need a subset.
 ```
 
 **For faster analysis** (recommended for 100+ iterations):
@@ -134,6 +161,13 @@ python -m scDCF \
   --rna_count_column nCount_RNA
 ```
 
+Each cell type produces:
+- `*_disease_monte_carlo_results.csv` / `*_healthy_monte_carlo_results.csv`
+- `*_disease_combined.csv` / `*_healthy_combined.csv`
+- `*_final_summary.csv` (includes AnnData metadata by default)
+
+Use `--no_metadata` to skip merging metadata, or `--metadata_columns sample batch` to include a subset.
+
 **Quick test** (bundled synthetic data, completes in ~5 min):
 ```bash
 python -m scDCF \
@@ -176,6 +210,8 @@ For a concise overview, see the detailed methodology in `scDCF/docs/methods.md`.
 | `--parallel` | flag | `False` | Enable parallel execution with auto-selected worker pool. |
 | `--parallel_workers` | int | auto (≤ min(CPUs-1, 8)) | Limit worker processes for Monte Carlo iterations. |
 | `--serial` | flag | `False` | Force single-core execution (disables parallel pool). |
+| `--no_metadata` | flag | `False` | Skip merging `adata.obs` columns into final summaries. |
+| `--metadata_columns` | list[str] | None | Only include specified `adata.obs` columns (ignored if `--no_metadata`). |
 
 For the methodological details, see [scDCF/docs/methods.md](scDCF/docs/methods.md).
 
