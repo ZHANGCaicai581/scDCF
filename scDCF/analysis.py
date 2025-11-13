@@ -135,15 +135,15 @@ def _preextract_expression_matrices(target_cells, reference_cells, valid_genes,
     
     # Extract target cell expressions for all valid genes
     if issparse(target_cells.X):
-        target_expr = target_cells.X[:, gene_indices].toarray()
+        target_expr = target_cells.X[:, gene_indices].tocsr()
     else:
-        target_expr = target_cells.X[:, gene_indices]
+        target_expr = np.asarray(target_cells.X[:, gene_indices])
     
     # Extract reference cell expressions
     if issparse(reference_cells.X):
-        ref_expr = reference_cells.X[:, gene_indices].toarray()
+        ref_expr = reference_cells.X[:, gene_indices].tocsr()
     else:
-        ref_expr = reference_cells.X[:, gene_indices]
+        ref_expr = np.asarray(reference_cells.X[:, gene_indices])
     
     # Pre-extract control gene expressions
     all_ctrl_genes = set()
@@ -156,11 +156,11 @@ def _preextract_expression_matrices(target_cells, reference_cells, valid_genes,
     
     if len(ctrl_gene_indices) > 0:
         if issparse(target_cells.X):
-            target_ctrl_expr = target_cells.X[:, ctrl_gene_indices].toarray()
-            ref_ctrl_expr = reference_cells.X[:, ctrl_gene_indices].toarray()
+            target_ctrl_expr = target_cells.X[:, ctrl_gene_indices].tocsr()
+            ref_ctrl_expr = reference_cells.X[:, ctrl_gene_indices].tocsr()
         else:
-            target_ctrl_expr = target_cells.X[:, ctrl_gene_indices]
-            ref_ctrl_expr = reference_cells.X[:, ctrl_gene_indices]
+            target_ctrl_expr = np.asarray(target_cells.X[:, ctrl_gene_indices])
+            ref_ctrl_expr = np.asarray(reference_cells.X[:, ctrl_gene_indices])
     else:
         target_ctrl_expr = None
         ref_ctrl_expr = None
@@ -305,13 +305,15 @@ def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, signifi
         # Map each significant gene to its control gene columns
         gene_ctrl_map = {}
         for gene_idx, gene in enumerate(valid_genes):
-            if gene in control_genes_filtered and control_genes_filtered[gene]:
-                # Map to column indices in ctrl expression matrix
-                gene_ctrl_map[gene_idx] = [
-                    ctrl_gene_to_col[ctrl_gene] 
-                    for ctrl_gene in control_genes_filtered[gene]
-                    if ctrl_gene in ctrl_gene_to_col
-                ]
+                if gene in control_genes_filtered and control_genes_filtered[gene]:
+                    # Map to column indices in ctrl expression matrix
+                    mapped = [
+                        ctrl_gene_to_col[ctrl_gene]
+                        for ctrl_gene in control_genes_filtered[gene]
+                        if ctrl_gene in ctrl_gene_to_col
+                    ]
+                    if mapped:
+                        gene_ctrl_map[gene_idx] = np.array(mapped, dtype=int)
         
         logging.info(f"✅ Pre-computation complete. Starting iterations...")
         
@@ -345,11 +347,15 @@ def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, signifi
                         
                         # ===== OPTIMIZATION 1 & 2: Use pre-extracted matrices =====
                         # Get expressions from pre-extracted arrays (FAST!)
-                        target_expr = target_expr_all[target_idx]  # Just array indexing
+                        if issparse(target_expr_all):
+                            target_expr = target_expr_all.getrow(target_idx).toarray().ravel()
+                        else:
+                            target_expr = target_expr_all[target_idx]
                         
-                        # Get ALL reference expressions and take mean (SAME as original!)
-                        ref_exprs = ref_expr_all[ref_indices]  # All reference cells
-                        ref_expr_mean = ref_exprs.mean(axis=0)  # Mean of all references
+                        if issparse(ref_expr_all):
+                            ref_expr_mean = np.asarray(ref_expr_all[ref_indices].mean(axis=0)).ravel()
+                        else:
+                            ref_expr_mean = ref_expr_all[ref_indices].mean(axis=0)
                         
                         # ===== OPTIMIZATION 2: Vectorize difference calculation =====
                         # All genes at once (no loop!) - SAME calculation, just vectorized
@@ -357,19 +363,23 @@ def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, signifi
                         
                         # Calculate control differences (SAME logic as original!)
                         ctrl_diffs = []
-                        for gene_idx in range(len(valid_genes)):
-                            if gene_idx in gene_ctrl_map and gene_ctrl_map[gene_idx]:
-                                # Randomly select one control gene (SAME as before)
-                                ctrl_col_idx = np.random.choice(gene_ctrl_map[gene_idx])
-                                
-                                # Get control expressions from pre-extracted matrices
-                                target_ctrl_val = target_ctrl_expr[target_idx, ctrl_col_idx]
-                                
-                                # Mean of ALL reference cells for control gene (SAME as original!)
-                                ref_ctrl_vals = ref_ctrl_expr[ref_indices, ctrl_col_idx]
-                                ref_ctrl_val = ref_ctrl_vals.mean()
-                                
-                                # Same calculation as before
+                        ctrl_diffs = []
+                        if gene_ctrl_map and target_ctrl_expr is not None and ref_ctrl_expr is not None:
+                            if issparse(target_ctrl_expr):
+                                target_ctrl_row = target_ctrl_expr.getrow(target_idx).toarray().ravel()
+                            else:
+                                target_ctrl_row = target_ctrl_expr[target_idx]
+                            
+                            if issparse(ref_ctrl_expr):
+                                ref_ctrl_mean_vec = np.asarray(ref_ctrl_expr[ref_indices].mean(axis=0)).ravel()
+                            else:
+                                ref_ctrl_mean_vec = ref_ctrl_expr[ref_indices].mean(axis=0)
+                            for gene_idx, ctrl_cols in gene_ctrl_map.items():
+                                if ctrl_cols.size == 0:
+                                    continue
+                                ctrl_col_idx = np.random.choice(ctrl_cols)
+                                target_ctrl_val = target_ctrl_row[ctrl_col_idx]
+                                ref_ctrl_val = ref_ctrl_mean_vec[ctrl_col_idx]
                                 ctrl_diff = gene_weights[gene_idx] * abs(target_ctrl_val - ref_ctrl_val)
                                 ctrl_diffs.append(ctrl_diff)
                         

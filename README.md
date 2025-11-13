@@ -267,7 +267,7 @@ The framework works with standard scRNA-seq datasets, but performs best with:
 scDCF implements a rigorous statistical framework:
 
 1. **Library-size matching**: Each target cell matched to 1,000 nearest healthy cells by RNA count; 100 sampled per Monte Carlo iteration
-2. **Control gene selection**: 10 control genes per prioritized gene, matched on mean/variance/CV within cell type and disease status
+2. **Control gene selection**: 10 control genes per prioritized gene, matched on mean and variance within cell type and disease status
 3. **Difference-of-differences**: Target-reference differences minus control-reference differences, weighted by MAGMA Z-scores
 4. **Fisher meta-analysis**: Iteration-level p-values combined via Fisher's method; Benjamini-Hochberg FDR correction across cells
 5. **Cell-type enrichment**: Fisher's exact test on disease-associated cell proportions between patient and control groups
