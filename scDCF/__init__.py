@@ -1,4 +1,4 @@
-__version__ = '0.1.14'
+__version__ = '0.1.15'
 
 # Import commonly used functions for convenience
 from .utils import read_gene_symbols
