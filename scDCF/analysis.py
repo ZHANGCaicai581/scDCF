@@ -82,8 +82,8 @@ def _validate_monte_carlo_inputs(adata, cell_type, cell_type_column,
     
     logging.info("✅ Input validation passed")
 
-def get_nearest_cells(target_cells, reference_cells, rna_count_column, 
-                     n_samples=DEFAULT_N_SAMPLES_PER_ITER):
+def get_nearest_cells(target_cells, reference_cells, rna_count_column,
+                     n_samples=DEFAULT_N_SAMPLES_PER_ITER, exclude_self=False):
     """Find nearest cells - same algorithm as before"""
     if rna_count_column not in target_cells.obs.columns:
         raise ValueError(f"Column '{rna_count_column}' not found in target_cells.obs")
@@ -104,6 +104,16 @@ def get_nearest_cells(target_cells, reference_cells, rna_count_column,
             nearest_indices = np.argpartition(
                 differences[i], DEFAULT_N_NEAREST_CELLS
             )[:DEFAULT_N_NEAREST_CELLS]
+
+        if exclude_self:
+            nearest_indices = nearest_indices[
+                reference_cell_ids[nearest_indices] != target_cell_id
+            ]
+
+        if len(nearest_indices) == 0:
+            raise ValueError(
+                f"No eligible reference cells remain for target cell '{target_cell_id}'."
+            )
 
         if n_samples >= len(nearest_indices):
             sampled_indices = nearest_indices
@@ -234,6 +244,7 @@ def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, signifi
             )
         
         # Split groups (same as before)
+        exclude_self_reference = False
         if target_group == "disease":
             target_mask = [value_equals(v, disease_value) for v in adata_subset.obs[disease_marker]]
             target_cells = adata_subset[target_mask].copy()
@@ -243,9 +254,10 @@ def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, signifi
         else:
             target_mask = [value_equals(v, healthy_value) for v in adata_subset.obs[disease_marker]]
             target_cells = adata_subset[target_mask].copy()
-            ref_mask = [value_equals(v, disease_value) for v in adata_subset.obs[disease_marker]]
+            ref_mask = [value_equals(v, healthy_value) for v in adata_subset.obs[disease_marker]]
             reference_cells = adata_subset[ref_mask].copy()
             control_genes = healthy_control_genes
+            exclude_self_reference = True
 
         logging.info(f"{len(target_cells)} target cells, {len(reference_cells)} reference cells")
 
@@ -260,8 +272,9 @@ def monte_carlo_comparison_optimized(adata, cell_type, cell_type_column, signifi
         
         # Get nearest cells (same algorithm)
         matched_indices = get_nearest_cells(
-            target_cells, reference_cells, rna_count_column, 
-            n_samples=DEFAULT_N_SAMPLES_PER_ITER
+            target_cells, reference_cells, rna_count_column,
+            n_samples=DEFAULT_N_SAMPLES_PER_ITER,
+            exclude_self=exclude_self_reference
         )
         
         # Filter valid genes (same as before)
@@ -500,4 +513,3 @@ def compare_groups(disease_df, healthy_df):
 
 # Alias for backward compatibility
 monte_carlo_comparison = monte_carlo_comparison_optimized
-
