@@ -2,7 +2,6 @@ import os
 import logging
 import json
 import numpy as np
-import matplotlib.pyplot as plt
 
 def read_gene_symbols(file_path, zstat_column=None):
     """

@@ -133,7 +133,9 @@ results = scDCF.auto_monte_carlo(
 )
 ```
 
-For detailed examples, see the [examples directory](examples/). Also see the methods summary in [scDCF/docs/methods.md](scDCF/docs/methods.md).
+For detailed examples, see the [examples directory](examples/) and
+[examples/README.md](examples/README.md). For implementation notes, see
+[docs/methods.md](docs/methods.md).
 
 ### Command Line Usage
 
@@ -162,11 +164,18 @@ python -m scDCF \
 ```
 
 Each cell type produces:
-- `*_disease_monte_carlo_results.csv` / `*_healthy_monte_carlo_results.csv`
-- `*_disease_combined.csv` / `*_healthy_combined.csv`
 - `*_final_summary.csv` (includes AnnData metadata by default)
 
+The dataset-level post-analysis also produces:
+- `celltype_enrichment_summary.csv` (Fisher's exact test per cell type with BH-adjusted `q_type`)
+
+Optional intermediate exports (`--export_intermediate`) add:
+- `*_disease_monte_carlo_results.csv` / `*_healthy_monte_carlo_results.csv`
+  Raw per-iteration per-cell results, including `reference_group`, `reference_pool_size`, `reference_sample_size`, and `reference_self_excluded`
+- `*_disease_combined.csv` / `*_healthy_combined.csv` (includes `q_cell` and `scdcf_significant`)
+
 Use `--no_metadata` to skip merging metadata, or `--metadata_columns sample batch` to include a subset.
+See [docs/output_structure.md](docs/output_structure.md) for the full output description.
 
 **Quick test** (bundled synthetic data, completes in ~5 min):
 ```bash
@@ -183,9 +192,18 @@ python -m scDCF \
 > **Note:** scDCF now runs Monte Carlo iterations serially by default (single core). Enable parallel mode with `--parallel` (auto-selects a capped worker pool, `≤ min(total CPUs - 1, 8)`) or specify `--parallel_workers N`. Use `--serial` to force single-core behavior explicitly.
 
 
+### Repository Layout
+
+- `scDCF/`: installable package code
+- `examples/`: small public usage examples
+- `tests/`: lightweight package verification
+- `docs/`: repo-level package documentation
+- `data/test/`: bundled synthetic test inputs
+
 ### Methods at a glance
 
-For a concise overview, see the detailed methodology in `scDCF/docs/methods.md`. The README intentionally stays brief to focus on usage.
+For a concise overview, see [docs/methods.md](docs/methods.md). The README
+intentionally stays brief to focus on usage.
 
 ### Command-line parameters
 
@@ -202,18 +220,20 @@ For a concise overview, see the detailed methodology in `scDCF/docs/methods.md`.
 | `--healthy_value` | (str|int|float) | `0` | Value indicating healthy cells. |
 | `--rna_count_column` | str | `nCount_RNA` | Column in `adata.obs` for library size / RNA counts. |
 | `--iterations` | int | `10` | Number of Monte Carlo iterations. |
+| `--random_seed` | int | None | Optional seed for reproducible Monte Carlo sampling. |
 | `--show_progress` | flag | `False` | Show per-iteration progress bar. |
 | `--log_file` | path | None | Optional log file path. |
 | `--control_genes_file` | path | None | JSON file with precomputed control genes. |
 | `--control_genes_dir` | path | None | Directory to save newly generated control genes. |
 | `--step` | {`all`,`monte_carlo`,`post_analysis`} | `all` | Run full pipeline or a specific step only. |
+| `--export_intermediate` | flag | `False` | Export intermediate Monte Carlo and combined CSVs in addition to final outputs. |
 | `--parallel` | flag | `False` | Enable parallel execution with auto-selected worker pool. |
 | `--parallel_workers` | int | auto (≤ min(CPUs-1, 8)) | Limit worker processes for Monte Carlo iterations. |
 | `--serial` | flag | `False` | Force single-core execution (disables parallel pool). |
 | `--no_metadata` | flag | `False` | Skip merging `adata.obs` columns into final summaries. |
 | `--metadata_columns` | list[str] | None | Only include specified `adata.obs` columns (ignored if `--no_metadata`). |
 
-For the methodological details, see [scDCF/docs/methods.md](scDCF/docs/methods.md).
+For the methodological details, see [docs/methods.md](docs/methods.md).
 
 #### Advanced CLI examples
 
@@ -251,6 +271,10 @@ python -m scDCF \
   --show_progress
 ```
 
+### Runtime
+- The bundled quick test above (2 iterations) typically finishes in about 5 minutes on a modern laptop.
+- Runtime scales roughly linearly with the number of iterations and cell types. Use `--parallel` (or `--parallel_workers N`) to reduce wall-clock time on multi-core machines.
+
 ## 5. Datasets and Methods
 
 ### GWAS Gene Selection
@@ -269,8 +293,8 @@ scDCF implements a rigorous statistical framework:
 1. **Library-size matching**: Each target cell matched to 1,000 nearest healthy cells by RNA count; 100 sampled per Monte Carlo iteration
 2. **Control gene selection**: 10 control genes per prioritized gene, matched on mean and variance within cell type and disease status
 3. **Difference-of-differences**: Target-reference differences minus control-reference differences, weighted by MAGMA Z-scores
-4. **Fisher meta-analysis**: Iteration-level p-values combined via Fisher's method; Benjamini-Hochberg FDR correction across cells
-5. **Cell-type enrichment**: Fisher's exact test on disease-associated cell proportions between patient and control groups
+4. **Fisher meta-analysis**: Iteration-level p-values combined via Fisher's method, followed by Benjamini-Hochberg FDR correction across cells to define `q_cell`
+5. **Cell-type enrichment**: Fisher's exact test on disease-associated cell proportions between patient and control groups, followed by Benjamini-Hochberg correction across cell types to define `q_type`
 
 ## 6. Data Sources
 

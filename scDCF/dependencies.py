@@ -1,10 +1,8 @@
 """
-Check and install dependencies for scDCF package.
+Dependency checks for the scDCF package.
 """
 
 import importlib
-import subprocess
-import sys
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +21,10 @@ REQUIRED_PACKAGES = {
 
 def check_and_install_dependencies():
     """
-    Check if all required dependencies are installed and install missing ones.
+    Check whether required dependencies are importable.
+
+    Packages should be installed through the package manager at environment setup
+    time, not from inside the CLI at runtime.
     """
     missing_packages = []
     
@@ -36,13 +37,11 @@ def check_and_install_dependencies():
             logger.warning(f"Package {package_name} is not installed.")
     
     if missing_packages:
-        logger.info(f"Installing missing packages: {', '.join(missing_packages)}")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing_packages)
-            logger.info("All missing packages have been installed successfully.")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to install missing packages: {e}")
-            logger.error("Please install the missing packages manually.")
-            raise ImportError("Required packages are missing and could not be installed automatically.")
+        missing_str = ", ".join(missing_packages)
+        logger.error(f"Missing required packages: {missing_str}")
+        raise ImportError(
+            "Missing required scDCF dependencies: "
+            f"{missing_str}. Install them with your environment manager before running scDCF."
+        )
     else:
-        logger.info("All required packages are already installed.") 
+        logger.info("All required packages are already installed.")

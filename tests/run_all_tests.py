@@ -3,47 +3,29 @@ import os
 import logging
 import subprocess
 import sys
-import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def run_tests():
-    """Run all tests to verify the package is working correctly"""
+    """Run stable smoke tests to verify the public package workflow."""
     tests = [
-        ("python test_organization.py", "Basic organization test"),
-        ("python test_with_existing.py", "Testing with existing data"),
-        ("python test_integration.py", "Package integration test"),
-        ("python test_control_genes.py", "Control genes test")
+        ([sys.executable, os.path.join("tests", "test_pipeline_smoke.py")], "End-to-end pipeline smoke test")
     ]
     
     results = []
+    env = os.environ.copy()
+    env.setdefault("MPLCONFIGDIR", "/private/tmp/mpl")
+    env.setdefault("XDG_CACHE_HOME", "/private/tmp/cache")
+    env.setdefault("NUMBA_CACHE_DIR", "/private/tmp/numba")
+
     for cmd, desc in tests:
         logging.info(f"Running: {desc}")
         print(f"\n{'='*50}")
         print(f"TEST: {desc}")
         print(f"{'='*50}")
         
-        # Add retries for test_with_existing.py which seems problematic
-        if "test_with_existing.py" in cmd:
-            max_retries = 3
-            retry_count = 0
-            success = False
-            
-            while retry_count < max_retries and not success:
-                if retry_count > 0:
-                    logging.info(f"Retry {retry_count}/{max_retries} for {desc}")
-                    # Wait a moment before retrying
-                    time.sleep(2)
-                
-                result = subprocess.run(cmd, shell=True)
-                success = result.returncode == 0
-                retry_count += 1
-                
-                if not success and retry_count < max_retries:
-                    logging.warning(f"Test failed, will retry {retry_count}/{max_retries}")
-        else:
-            result = subprocess.run(cmd, shell=True)
-            success = result.returncode == 0
+        result = subprocess.run(cmd, env=env)
+        success = result.returncode == 0
         
         results.append((desc, success))
         

@@ -8,9 +8,7 @@ Typical speedup: 4-8x on multi-core systems.
 import os
 import logging
 import multiprocessing as mp
-import numpy as np
 import pandas as pd
-from functools import partial
 import traceback
 
 from .analysis import monte_carlo_comparison as _monte_carlo_single
@@ -23,11 +21,7 @@ def _worker_single_iteration(iteration_num, adata_path, genes_df, disease_ctrl, 
     """
     try:
         import scanpy as sc
-        from scDCF.utils import read_gene_symbols
-        
-        # Set random seed for reproducibility
-        np.random.seed(42 + iteration_num)
-        
+
         # Each worker loads its own data copy
         adata = sc.read_h5ad(adata_path)
         
@@ -37,6 +31,9 @@ def _worker_single_iteration(iteration_num, adata_path, genes_df, disease_ctrl, 
         else:
             significant_genes_df = genes_df
         
+        base_seed = config.get('random_seed')
+        worker_seed = None if base_seed is None else int(base_seed) + int(iteration_num)
+
         # Run single iteration
         result = _monte_carlo_single(
             adata=adata,
@@ -53,7 +50,10 @@ def _worker_single_iteration(iteration_num, adata_path, genes_df, disease_ctrl, 
             iterations=1,  # Single iteration per worker
             target_group=target_group,
             batch_size=config.get('batch_size', 500),
-            show_progress=False
+            show_progress=False,
+            random_seed=worker_seed,
+            write_iteration_files=False,
+            write_combined_output=False
         )
         
         if result.empty:
@@ -62,15 +62,15 @@ def _worker_single_iteration(iteration_num, adata_path, genes_df, disease_ctrl, 
         # Update iteration number
         result['iteration'] = iteration_num
         
-        # Save iteration file
-        cell_type_dir = os.path.join(output_dir, cell_type)
-        os.makedirs(cell_type_dir, exist_ok=True)
-        
-        iter_file = os.path.join(
-            cell_type_dir,
-            f"{cell_type}_{target_group}_monte_carlo_results_iteration{iteration_num}.csv"
-        )
-        result.to_csv(iter_file, index=False)
+        if config.get('write_iteration_files', False):
+            cell_type_dir = os.path.join(output_dir, cell_type)
+            os.makedirs(cell_type_dir, exist_ok=True)
+            
+            iter_file = os.path.join(
+                cell_type_dir,
+                f"{cell_type}_{target_group}_monte_carlo_results_iteration{iteration_num}.csv"
+            )
+            result.to_csv(iter_file, index=False)
         
         return {
             'success': True,
@@ -94,7 +94,10 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
                                    iterations=10, target_group="disease",
                                    disease_marker='disease_numeric',
                                    disease_value=1, healthy_value=0,
-                                   n_workers=None, batch_size=500, show_progress=True):
+                                   n_workers=None, batch_size=500, show_progress=True,
+                                   random_seed=None, adata_path=None,
+                                   write_iteration_files=False,
+                                   write_combined_output=False):
     """
     Parallel Monte Carlo comparison with automatic multi-core utilization.
     
@@ -176,14 +179,20 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
     logging.info(f"Parallel worker pool size: {n_workers}")
     logging.info(f"Expected speedup: up to ~{n_workers}x")
     
-    # Save adata to temp file for workers
-    temp_h5ad = tempfile.NamedTemporaryFile(suffix='.h5ad', delete=False)
-    temp_h5ad_path = temp_h5ad.name
-    temp_h5ad.close()
+    temp_h5ad_path = None
+    cleanup_temp_h5ad = False
     
     try:
-        # Save adata for workers to load
-        adata.write_h5ad(temp_h5ad_path)
+        if adata_path and os.path.exists(adata_path):
+            temp_h5ad_path = adata_path
+            logging.info(f"Using existing AnnData file for parallel workers: {adata_path}")
+        else:
+            temp_h5ad = tempfile.NamedTemporaryFile(suffix='.h5ad', delete=False)
+            temp_h5ad_path = temp_h5ad.name
+            temp_h5ad.close()
+            cleanup_temp_h5ad = True
+            adata.write_h5ad(temp_h5ad_path)
+            logging.info(f"Wrote temporary AnnData file for parallel workers: {temp_h5ad_path}")
         
         # Convert genes_df to dict for pickling
         genes_dict = significant_genes_df.to_dict('list')
@@ -195,7 +204,9 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
             'disease_value': disease_value,
             'healthy_value': healthy_value,
             'rna_count_column': rna_count_column,
-            'batch_size': batch_size
+            'batch_size': batch_size,
+            'random_seed': random_seed,
+            'write_iteration_files': write_iteration_files
         }
         
         # Prepare worker arguments
@@ -239,12 +250,12 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
         all_dfs = [r['result'] for r in results if r['result'] is not None]
         combined = pd.concat(all_dfs, ignore_index=True)
         
-        # Save combined
-        cell_type_dir = os.path.join(output_dir, cell_type)
-        combined_file = os.path.join(cell_type_dir, f"{cell_type}_{target_group}_monte_carlo_results.csv")
-        combined.to_csv(combined_file, index=False)
-        
-        logging.info(f"Combined results saved: {combined_file}")
+        if write_combined_output:
+            cell_type_dir = os.path.join(output_dir, cell_type)
+            os.makedirs(cell_type_dir, exist_ok=True)
+            combined_file = os.path.join(cell_type_dir, f"{cell_type}_{target_group}_monte_carlo_results.csv")
+            combined.to_csv(combined_file, index=False)
+            logging.info(f"Combined results saved: {combined_file}")
         logging.info(f"Total cells: {combined['cell_id'].nunique()}")
         
         # Statistics
@@ -257,10 +268,11 @@ def parallel_monte_carlo_comparison(adata, cell_type, cell_type_column, signific
         
     finally:
         # Clean up temp file
-        try:
-            os.unlink(temp_h5ad_path)
-        except:
-            pass
+        if cleanup_temp_h5ad and temp_h5ad_path:
+            try:
+                os.unlink(temp_h5ad_path)
+            except OSError:
+                pass
 
 # Convenience function
 def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
@@ -283,6 +295,7 @@ def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
     # Auto-detect
     total_cpus = mp.cpu_count() or 1
     n_workers = kwargs.pop('n_workers', None)
+    adata_path = kwargs.pop('adata_path', None)
 
     if use_parallel is None:
         # If user specified worker count we respect it and enable parallel,
@@ -294,7 +307,7 @@ def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
         return parallel_monte_carlo_comparison(
             adata, cell_type, cell_type_column, significant_genes_df,
             disease_control_genes, healthy_control_genes, output_dir,
-            iterations=iterations, n_workers=n_workers, **kwargs
+            iterations=iterations, n_workers=n_workers, adata_path=adata_path, **kwargs
         )
 
     logging.info("Using serial processing (auto-monte-carlo)")
@@ -303,4 +316,3 @@ def auto_monte_carlo(adata, cell_type, cell_type_column, significant_genes_df,
         disease_control_genes, healthy_control_genes, output_dir,
         iterations=iterations, **kwargs
     )
-

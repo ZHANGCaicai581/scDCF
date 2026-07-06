@@ -4,10 +4,42 @@ import os
 import pandas as pd
 import numpy as np
 import logging
-from scipy.stats import combine_pvalues, norm
+from scipy.stats import combine_pvalues, norm, fisher_exact
+from statsmodels.stats.multitest import multipletests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+CELL_Q_ALPHA = 0.05
+CELLTYPE_Q_ALPHA = 0.05
+
+
+def _sanitize_p_values(p_values):
+    """Clip p-values into the open interval (0, 1] and drop invalid entries."""
+    clean = pd.to_numeric(pd.Series(p_values), errors='coerce').dropna()
+    if clean.empty:
+        return np.array([], dtype=float)
+    clean = clean.clip(lower=np.finfo(float).tiny, upper=1.0)
+    return clean.to_numpy(dtype=float)
+
+
+def _add_fdr_column(df, p_column, q_column):
+    """Append BH-adjusted q-values for the supplied p-value column."""
+    out = df.copy()
+    out[q_column] = np.nan
+
+    if out.empty or p_column not in out.columns:
+        return out
+
+    valid_mask = out[p_column].notna()
+    if not valid_mask.any():
+        return out
+
+    out.loc[valid_mask, q_column] = multipletests(
+        out.loc[valid_mask, p_column].astype(float),
+        method='fdr_bh'
+    )[1]
+    return out
 
 def load_monte_carlo_results(results_file):
     """
@@ -31,7 +63,7 @@ def load_monte_carlo_results(results_file):
         logging.error(f"Error loading results from {results_file}: {e}")
         return pd.DataFrame()
 
-def combine_p_values_across_iterations(combined_results, output_dir, cell_type, target_group):
+def combine_p_values_across_iterations(combined_results, output_dir, cell_type, target_group, write_output=False):
     """
     Combine p-values across Monte Carlo iterations.
     
@@ -71,9 +103,9 @@ def combine_p_values_across_iterations(combined_results, output_dir, cell_type, 
             gene_column = combined_results.columns[0]
             logging.warning(f"Could not identify gene column, using first column: '{gene_column}'")
     
-    # Get unique genes
-    genes = combined_results[gene_column].unique()
-    logging.info(f"Found {len(genes)} unique genes")
+    # Get unique cells/genes
+    unit_ids = combined_results[gene_column].dropna().unique()
+    logging.info(f"Found {len(unit_ids)} unique entries to aggregate")
     
     # Create output directory for cell type
     output_dir_cell_type = os.path.join(output_dir, cell_type)
@@ -97,9 +129,9 @@ def combine_p_values_across_iterations(combined_results, output_dir, cell_type, 
             logging.warning("No iteration column found, assuming all results are from a single iteration")
     
     # Combine p-values for each gene
-    for gene in genes:
-        gene_results = combined_results[combined_results[gene_column] == gene]
-        iterations = gene_results[iteration_column].unique()
+    for unit_id in unit_ids:
+        unit_results = combined_results[combined_results[gene_column] == unit_id]
+        iterations = unit_results[iteration_column].dropna().unique()
         
         # Extract p-values across iterations
         p_values = []
@@ -108,54 +140,75 @@ def combine_p_values_across_iterations(combined_results, output_dir, cell_type, 
         p_value_column = None
         possible_p_columns = ['p_value', 'pvalue', 'p-value', 'p']
         for col in possible_p_columns:
-            if col in gene_results.columns:
+            if col in unit_results.columns:
                 p_value_column = col
                 break
-        
+
         if p_value_column is None:
             # Try to infer p-value column
-            p_like_columns = [col for col in gene_results.columns if 'p' in col.lower() and 'value' in col.lower()]
+            p_like_columns = [col for col in unit_results.columns if 'p' in col.lower() and 'value' in col.lower()]
             if p_like_columns:
                 p_value_column = p_like_columns[0]
             else:
-                logging.warning(f"Could not find p-value column for gene {gene}, skipping")
+                logging.warning(f"Could not find p-value column for '{unit_id}', skipping")
                 continue
-        
+
         for iteration in iterations:
-            iter_results = gene_results[gene_results[iteration_column] == iteration]
+            iter_results = unit_results[unit_results[iteration_column] == iteration]
             if not iter_results.empty and p_value_column in iter_results.columns:
                 p_value = iter_results[p_value_column].iloc[0]
                 if not np.isnan(p_value):
                     p_values.append(p_value)
-        
+
         if len(p_values) > 0:
             # Combine p-values using Fisher's method
             try:
-                combined_pvalue_fisher = combine_pvalues(p_values, method='fisher')[1]
+                clean_p_values = _sanitize_p_values(p_values)
+                if clean_p_values.size == 0:
+                    continue
+
+                combined_pvalue_fisher = combine_pvalues(clean_p_values, method='fisher')[1]
                 # Combine p-values using Stouffer's method
-                combined_pvalue_stouffer = combine_pvalues(p_values, method='stouffer')[1]
-                
+                combined_pvalue_stouffer = combine_pvalues(clean_p_values, method='stouffer')[1]
+
                 combined_p_values.append({
-                    'gene': gene,
-                    'num_iterations': len(p_values),
+                    'cell_id': str(unit_id),
+                    'num_iterations': int(clean_p_values.size),
                     'combined_p_value_fisher': combined_pvalue_fisher,
                     'combined_p_value_stouffer': combined_pvalue_stouffer,
-                    'min_p_value': min(p_values),
-                    'max_p_value': max(p_values),
-                    'mean_p_value': np.mean(p_values)
+                    'min_p_value': float(np.min(clean_p_values)),
+                    'max_p_value': float(np.max(clean_p_values)),
+                    'mean_p_value': float(np.mean(clean_p_values)),
+                    'target_group': target_group
                 })
             except Exception as e:
-                logging.warning(f"Error combining p-values for gene {gene}: {e}")
-    
+                logging.warning(f"Error combining p-values for '{unit_id}': {e}")
+
     # Create DataFrame from combined p-values
     combined_p_values_df = pd.DataFrame(combined_p_values)
-    if not combined_p_values_df.empty and 'gene' in combined_p_values_df.columns and 'cell_id' not in combined_p_values_df.columns:
-        combined_p_values_df = combined_p_values_df.rename(columns={'gene': 'cell_id'})
-    
-    # Save combined p-values
-    combined_p_values_file = os.path.join(output_dir_cell_type, f"{cell_type}_{target_group}_combined.csv")
-    combined_p_values_df.to_csv(combined_p_values_file, index=False)
-    logging.info(f"Combined p-values saved to {combined_p_values_file}")
+    if combined_p_values_df.empty:
+        combined_p_values_df = pd.DataFrame(columns=[
+            'cell_id',
+            'num_iterations',
+            'combined_p_value_fisher',
+            'combined_p_value_stouffer',
+            'min_p_value',
+            'max_p_value',
+            'mean_p_value',
+            'target_group'
+        ])
+    else:
+        combined_p_values_df = _add_fdr_column(
+            combined_p_values_df,
+            p_column='combined_p_value_fisher',
+            q_column='q_cell'
+        )
+        combined_p_values_df['scdcf_significant'] = combined_p_values_df['q_cell'] <= CELL_Q_ALPHA
+
+    if write_output:
+        combined_p_values_file = os.path.join(output_dir_cell_type, f"{cell_type}_{target_group}_combined.csv")
+        combined_p_values_df.to_csv(combined_p_values_file, index=False)
+        logging.info(f"Combined p-values saved to {combined_p_values_file}")
 
     return combined_p_values_df
 
@@ -188,12 +241,13 @@ def export_final_celltype_summary(cell_type, disease_combined, healthy_combined,
         group_df['cell_id'] = group_df['cell_id'].astype(str)
         group_df['target_group'] = group_df.get('target_group', group_name)
         group_df['group'] = group_name
+        group_df['analyzed_cell_type'] = cell_type
         # Derived statistics
         if 'combined_p_value_fisher' in group_df.columns:
             group_df['combined_minus_log10_p'] = -np.log10(group_df['combined_p_value_fisher'].clip(lower=1e-300))
-            group_df['combined_fisher_z'] = norm.isf(group_df['combined_p_value_fisher'].clip(lower=1e-300) / 2)
+            group_df['combined_fisher_z'] = norm.isf(group_df['combined_p_value_fisher'].clip(lower=1e-300))
         if 'combined_p_value_stouffer' in group_df.columns:
-            group_df['combined_stouffer_z'] = norm.isf(group_df['combined_p_value_stouffer'].clip(lower=1e-300) / 2)
+            group_df['combined_stouffer_z'] = norm.isf(group_df['combined_p_value_stouffer'].clip(lower=1e-300))
         frames.append(group_df)
 
     if not frames:
@@ -218,6 +272,7 @@ def export_final_celltype_summary(cell_type, disease_combined, healthy_combined,
     columns_order = [
         'cell_id', 'original_cell_id', 'group',
         'combined_p_value_fisher', 'combined_p_value_stouffer',
+        'q_cell', 'scdcf_significant',
         'combined_minus_log10_p', 'combined_fisher_z', 'combined_stouffer_z',
         'num_iterations', 'min_p_value', 'max_p_value', 'mean_p_value'
     ]
@@ -230,6 +285,166 @@ def export_final_celltype_summary(cell_type, disease_combined, healthy_combined,
     logging.info(f"Final summary saved to {final_path} ({len(final_df)} rows).")
 
     return final_df
+
+
+def load_final_summaries(output_dir, cell_types=None):
+    """Load per-cell-type final summaries from disk."""
+    summaries = {}
+
+    if cell_types is None:
+        if not os.path.exists(output_dir):
+            return summaries
+        cell_types = [
+            entry for entry in os.listdir(output_dir)
+            if os.path.isdir(os.path.join(output_dir, entry))
+        ]
+
+    for cell_type in cell_types:
+        summary_path = os.path.join(output_dir, cell_type, f"{cell_type}_final_summary.csv")
+        if not os.path.exists(summary_path):
+            logging.warning(f"Final summary not found for cell type '{cell_type}': {summary_path}")
+            continue
+        try:
+            summaries[cell_type] = pd.read_csv(summary_path)
+        except Exception as exc:
+            logging.warning(f"Unable to load final summary for '{cell_type}': {exc}")
+
+    return summaries
+
+
+def apply_dataset_level_cell_fdr(combined_results_by_cell_type, output_dir='.', alpha=CELL_Q_ALPHA, write_output=False):
+    """
+    Recompute q_cell across all tested cells within each target-group analysis.
+
+    The input is a mapping of:
+        {cell_type: {'disease': disease_df, 'healthy': healthy_df}}
+    """
+    adjusted = {}
+
+    for target_group in ('disease', 'healthy'):
+        group_frames = []
+
+        for cell_type, group_map in combined_results_by_cell_type.items():
+            group_df = group_map.get(target_group)
+            if group_df is None or group_df.empty:
+                continue
+
+            tmp = group_df.copy()
+            tmp['cell_type'] = cell_type
+            group_frames.append(tmp)
+
+        if not group_frames:
+            continue
+
+        all_group_df = pd.concat(group_frames, ignore_index=True)
+        all_group_df = _add_fdr_column(
+            all_group_df,
+            p_column='combined_p_value_fisher',
+            q_column='q_cell'
+        )
+        all_group_df['scdcf_significant'] = all_group_df['q_cell'] <= alpha
+
+        for cell_type, cell_df in all_group_df.groupby('cell_type', sort=False):
+            split_df = cell_df.drop(columns=['cell_type']).reset_index(drop=True)
+            adjusted.setdefault(cell_type, {})[target_group] = split_df
+
+            if write_output:
+                combined_path = os.path.join(output_dir, cell_type, f"{cell_type}_{target_group}_combined.csv")
+                split_df.to_csv(combined_path, index=False)
+                logging.info(
+                    f"Dataset-level q_cell updated for {cell_type} ({target_group}) and saved to {combined_path}"
+                )
+
+    return adjusted
+
+
+def compute_celltype_enrichment(final_summaries=None, output_dir='.', cell_types=None,
+                                alpha=CELL_Q_ALPHA, celltype_alpha=CELLTYPE_Q_ALPHA):
+    """
+    Compare significant-cell proportions between disease and healthy groups per cell type.
+
+        Fisher's exact test is applied independently within each analyzed cell type with the
+        one-sided alternative that the disease group has a higher significant-cell proportion,
+        then the resulting p-values are BH-adjusted across the tested cell types.
+    """
+    if final_summaries is None:
+        final_summaries = load_final_summaries(output_dir, cell_types=cell_types)
+
+    records = []
+
+    for cell_type, df in final_summaries.items():
+        if df is None or df.empty:
+            continue
+
+        if 'group' not in df.columns:
+            logging.warning(f"Skipping cell-type enrichment for '{cell_type}': missing 'group' column.")
+            continue
+
+        if 'q_cell' not in df.columns:
+            logging.warning(f"Skipping cell-type enrichment for '{cell_type}': missing 'q_cell' column.")
+            continue
+
+        group_series = df['group'].astype(str)
+        disease_mask = group_series == 'disease'
+        healthy_mask = group_series == 'healthy'
+
+        n_disease = int(disease_mask.sum())
+        n_healthy = int(healthy_mask.sum())
+
+        if n_disease == 0 or n_healthy == 0:
+            logging.warning(
+                f"Skipping cell-type enrichment for '{cell_type}': "
+                f"disease cells={n_disease}, healthy cells={n_healthy}."
+            )
+            continue
+
+        disease_sig = int((df.loc[disease_mask, 'q_cell'] <= alpha).sum())
+        healthy_sig = int((df.loc[healthy_mask, 'q_cell'] <= alpha).sum())
+        disease_non_sig = n_disease - disease_sig
+        healthy_non_sig = n_healthy - healthy_sig
+
+        table = [[disease_sig, disease_non_sig], [healthy_sig, healthy_non_sig]]
+        odds_ratio, p_value = fisher_exact(table, alternative='greater')
+
+        disease_prop = disease_sig / n_disease
+        healthy_prop = healthy_sig / n_healthy
+
+        records.append({
+            'cell_type': cell_type,
+            'disease_significant_cells': disease_sig,
+            'disease_non_significant_cells': disease_non_sig,
+            'healthy_significant_cells': healthy_sig,
+            'healthy_non_significant_cells': healthy_non_sig,
+            'disease_total_cells': n_disease,
+            'healthy_total_cells': n_healthy,
+            'disease_prop_significant': disease_prop,
+            'healthy_prop_significant': healthy_prop,
+            'odds_ratio': odds_ratio,
+            'p_value': p_value,
+            'fisher_alternative': 'greater',
+            'direction': 'disease_higher' if disease_prop > healthy_prop else 'healthy_higher_or_equal'
+        })
+
+    enrichment_df = pd.DataFrame(records)
+    if enrichment_df.empty:
+        logging.warning("No cell-type enrichment results were generated.")
+        return enrichment_df
+
+    enrichment_df = _add_fdr_column(enrichment_df, p_column='p_value', q_column='q_type')
+    enrichment_df['disease_enriched'] = (
+        (enrichment_df['disease_prop_significant'] > enrichment_df['healthy_prop_significant']) &
+        (enrichment_df['q_type'] <= celltype_alpha)
+    )
+    enrichment_df = enrichment_df.sort_values(
+        ['disease_enriched', 'q_type', 'p_value', 'cell_type'],
+        ascending=[False, True, True, True]
+    ).reset_index(drop=True)
+
+    output_path = os.path.join(output_dir, "celltype_enrichment_summary.csv")
+    enrichment_df.to_csv(output_path, index=False)
+    logging.info(f"Cell-type enrichment summary saved to {output_path} ({len(enrichment_df)} cell types).")
+
+    return enrichment_df
 
 def examine_results_format(results_file):
     """

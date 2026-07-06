@@ -4,17 +4,8 @@ import os
 import sys
 import argparse
 import logging
-import warnings
-import scanpy as sc
-import pandas as pd
-import numpy as np
-import anndata
-
-# Suppress warnings for cleaner output
-warnings.filterwarnings('ignore')
 
 # Import functions from your package modules
-from scDCF.dependencies import check_and_install_dependencies
 from scDCF.utils import (
     read_gene_symbols,
     filter_valid_genes,
@@ -30,7 +21,9 @@ from scDCF.post_analysis import (
     combine_p_values_across_iterations,
     visualize_combined_p_values,
     organize_results,
-    export_final_celltype_summary
+    export_final_celltype_summary,
+    apply_dataset_level_cell_fdr,
+    compute_celltype_enrichment
 )
 
 def setup_logging(log_file=None):
@@ -52,9 +45,6 @@ def main():
     """
     Main function to execute the scDCF analysis workflow.
     """
-    # Check and install missing dependencies
-    check_and_install_dependencies()
-
     parser = argparse.ArgumentParser(description='scDCF Analysis')
     parser.add_argument('--csv_file', 
                         help='Path to the file containing gene symbols (CSV, TXT, or TSV). Required if --gene_list_file is not provided.')
@@ -78,6 +68,8 @@ def main():
                         help='Column name containing RNA counts in AnnData obs.')
     parser.add_argument('--iterations', type=int, default=10, 
                         help='Number of Monte Carlo iterations.')
+    parser.add_argument('--random_seed', type=int,
+                        help='Optional random seed for reproducible Monte Carlo sampling.')
     parser.add_argument('--log_file', 
                         help='Path to log file. If not provided, logs will only be written to stdout.')
     parser.add_argument('--show_progress', action='store_true', 
@@ -99,8 +91,16 @@ def main():
                         help='Skip adding AnnData.obs metadata to final summaries (default includes all columns).')
     parser.add_argument('--metadata_columns', nargs='+',
                         help='Specific metadata columns from AnnData.obs to include (default: all columns unless --no_metadata).')
+    parser.add_argument('--skip_existing_groups', action='store_true',
+                        help='Skip Monte Carlo for groups that already have combined results.')
+    parser.add_argument('--export_intermediate', action='store_true',
+                        help='Export intermediate Monte Carlo and combined result CSVs in addition to final outputs.')
 
     args = parser.parse_args()
+
+    import pandas as pd
+    import numpy as np
+    import scanpy as sc
 
     # Set up logging
     setup_logging(args.log_file)
@@ -199,7 +199,19 @@ def main():
     # Prepare control genes configuration
     preloaded_control_genes = None
     if args.control_genes_file:
-        preloaded_control_genes = load_control_genes(args.control_genes_file)
+        loaded_disease_ctrl, loaded_healthy_ctrl = load_control_genes(args.control_genes_file)
+        if loaded_disease_ctrl and loaded_healthy_ctrl:
+            preloaded_control_genes = (loaded_disease_ctrl, loaded_healthy_ctrl)
+            if len(args.cell_types) > 1:
+                logging.warning(
+                    "A single --control_genes_file is being reused across multiple cell types. "
+                    "This is only appropriate if the JSON was generated for each requested cell type."
+                )
+        else:
+            logging.warning(
+                f"Unable to preload control genes from {args.control_genes_file}. "
+                "Falling back to per-cell-type control-gene generation."
+            )
 
     control_genes_dir = args.control_genes_dir
     if not control_genes_dir and not args.control_genes_file:
@@ -212,6 +224,10 @@ def main():
 
     # Run analysis for each cell type
     logging.info(f"Starting analysis for {len(args.cell_types)} cell types")
+    final_summaries = {}
+    combined_by_cell_type = {}
+    monte_carlo_results_cache = {}
+    save_intermediates = args.export_intermediate or args.step != 'all'
     
     for cell_type in args.cell_types:
         logging.info(f"Processing cell type: {cell_type}")
@@ -254,6 +270,7 @@ def main():
         # Step: Monte Carlo Analysis
         if args.step in ['all', 'monte_carlo']:
             logging.info(f"Running Monte Carlo comparison for {cell_type}.")
+            cell_group_results = {}
             
             additional_kwargs = {}
             if args.serial:
@@ -263,54 +280,86 @@ def main():
             
             if args.parallel_workers is not None:
                 additional_kwargs['n_workers'] = args.parallel_workers
+            if args.random_seed is not None:
+                additional_kwargs['random_seed'] = args.random_seed
+            if args.h5ad_file:
+                additional_kwargs['adata_path'] = args.h5ad_file
+            additional_kwargs['write_iteration_files'] = save_intermediates
+            additional_kwargs['write_combined_output'] = save_intermediates
 
-            # Run for disease group
-            disease_results = monte_carlo_comparison(
-                adata=adata,
-                cell_type=cell_type,
-                cell_type_column=args.celltype_column,
-                significant_genes_df=significant_genes_df,
-                disease_control_genes=disease_control_genes,
-                healthy_control_genes=healthy_control_genes,
-                output_dir=args.output_dir,
-                rna_count_column=args.rna_count_column,
-                iterations=args.iterations,
-                target_group="disease",
-                disease_marker=args.disease_marker,
-                disease_value=disease_value,
-                healthy_value=healthy_value,
-                show_progress=args.show_progress,
-                **additional_kwargs
-            )
-            
-            # Run for healthy group
-            healthy_results = monte_carlo_comparison(
-                adata=adata,
-                cell_type=cell_type,
-                cell_type_column=args.celltype_column,
-                significant_genes_df=significant_genes_df,
-                disease_control_genes=disease_control_genes,
-                healthy_control_genes=healthy_control_genes,
-                output_dir=args.output_dir,
-                rna_count_column=args.rna_count_column,
-                iterations=args.iterations,
-                target_group="healthy",
-                disease_marker=args.disease_marker,
-                disease_value=disease_value,
-                healthy_value=healthy_value,
-                show_progress=args.show_progress,
-                **additional_kwargs
-            )
+            def should_run_group(target_group):
+                result_file = os.path.join(
+                    args.output_dir, cell_type, f"{cell_type}_{target_group}_monte_carlo_results.csv"
+                )
+                exists = os.path.isfile(result_file)
+                if exists and args.skip_existing_groups:
+                    logging.info(f"Skipping {target_group} Monte Carlo for {cell_type}; {result_file} already exists.")
+                    return False
+                return True
+
+            disease_results = None
+            if should_run_group("disease"):
+                disease_results = monte_carlo_comparison(
+                    adata=adata,
+                    cell_type=cell_type,
+                    cell_type_column=args.celltype_column,
+                    significant_genes_df=significant_genes_df,
+                    disease_control_genes=disease_control_genes,
+                    healthy_control_genes=healthy_control_genes,
+                    output_dir=args.output_dir,
+                    rna_count_column=args.rna_count_column,
+                    iterations=args.iterations,
+                    target_group="disease",
+                    disease_marker=args.disease_marker,
+                    disease_value=disease_value,
+                    healthy_value=healthy_value,
+                    show_progress=args.show_progress,
+                    **additional_kwargs
+                )
+                cell_group_results["disease"] = disease_results
+            else:
+                logging.info(f"Using existing disease results for {cell_type}.")
+
+            healthy_results = None
+            if should_run_group("healthy"):
+                healthy_results = monte_carlo_comparison(
+                    adata=adata,
+                    cell_type=cell_type,
+                    cell_type_column=args.celltype_column,
+                    significant_genes_df=significant_genes_df,
+                    disease_control_genes=disease_control_genes,
+                    healthy_control_genes=healthy_control_genes,
+                    output_dir=args.output_dir,
+                    rna_count_column=args.rna_count_column,
+                    iterations=args.iterations,
+                    target_group="healthy",
+                    disease_marker=args.disease_marker,
+                    disease_value=disease_value,
+                    healthy_value=healthy_value,
+                    show_progress=args.show_progress,
+                    **additional_kwargs
+                )
+                cell_group_results["healthy"] = healthy_results
+            else:
+                logging.info(f"Using existing healthy results for {cell_type}.")
+
+            if cell_group_results:
+                monte_carlo_results_cache[cell_type] = cell_group_results
 
         # Step: Post-Analysis
         if args.step in ['all', 'post_analysis']:
             logging.info(f"Post-analysis for {cell_type}.")
 
-            # Load Monte Carlo results for both disease and healthy groups (by file path)
-            disease_file = os.path.join(args.output_dir, cell_type, f"{cell_type}_disease_monte_carlo_results.csv")
-            healthy_file = os.path.join(args.output_dir, cell_type, f"{cell_type}_healthy_monte_carlo_results.csv")
-            disease_results = load_monte_carlo_results(disease_file)
-            healthy_results = load_monte_carlo_results(healthy_file)
+            cached_results = monte_carlo_results_cache.get(cell_type, {})
+            disease_results = cached_results.get("disease")
+            healthy_results = cached_results.get("healthy")
+
+            if disease_results is None:
+                disease_file = os.path.join(args.output_dir, cell_type, f"{cell_type}_disease_monte_carlo_results.csv")
+                disease_results = load_monte_carlo_results(disease_file)
+            if healthy_results is None:
+                healthy_file = os.path.join(args.output_dir, cell_type, f"{cell_type}_healthy_monte_carlo_results.csv")
+                healthy_results = load_monte_carlo_results(healthy_file)
 
             # Check if either dataset is empty before proceeding
             if disease_results.empty or healthy_results.empty:
@@ -319,20 +368,57 @@ def main():
                 continue
 
             # Combine p-values across iterations
-            disease_combined = combine_p_values_across_iterations(disease_results, args.output_dir, cell_type, 'disease')
-            healthy_combined = combine_p_values_across_iterations(healthy_results, args.output_dir, cell_type, 'healthy')
+            disease_combined = combine_p_values_across_iterations(
+                disease_results, args.output_dir, cell_type, 'disease', write_output=save_intermediates
+            )
+            healthy_combined = combine_p_values_across_iterations(
+                healthy_results, args.output_dir, cell_type, 'healthy', write_output=save_intermediates
+            )
 
             # Visualize combined p-values and significant cell counts
             visualize_combined_p_values(disease_combined, healthy_combined, cell_type, args.output_dir)
 
-            export_final_celltype_summary(
+            combined_by_cell_type[cell_type] = {
+                'disease': disease_combined,
+                'healthy': healthy_combined
+            }
+
+    if args.step in ['all', 'post_analysis'] and combined_by_cell_type:
+        combined_by_cell_type = apply_dataset_level_cell_fdr(
+            combined_by_cell_type,
+            output_dir=args.output_dir,
+            write_output=save_intermediates
+        )
+
+        for cell_type in args.cell_types:
+            group_map = combined_by_cell_type.get(cell_type)
+            if not group_map:
+                continue
+
+            disease_combined = group_map.get('disease')
+            healthy_combined = group_map.get('healthy')
+            if disease_combined is None or healthy_combined is None:
+                continue
+
+            include_metadata = (not args.no_metadata) or (args.metadata_columns is not None)
+
+            final_summary = export_final_celltype_summary(
                 cell_type=cell_type,
                 disease_combined=disease_combined,
                 healthy_combined=healthy_combined,
                 output_dir=args.output_dir,
-                include_metadata=not args.no_metadata if args.metadata_columns is None else True,
-                adata=adata if not args.no_metadata else None,
+                include_metadata=include_metadata,
+                adata=adata if include_metadata else None,
                 metadata_columns=args.metadata_columns
+            )
+            if final_summary is not None and not final_summary.empty:
+                final_summaries[cell_type] = final_summary
+
+        if final_summaries:
+            compute_celltype_enrichment(
+                final_summaries=final_summaries,
+                output_dir=args.output_dir,
+                cell_types=args.cell_types
             )
 
     logging.info("Analysis complete.")

@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
-import matplotlib.pyplot as plt
 import logging
 
 # Configure logging
@@ -60,6 +59,7 @@ def run_scDCF_test(adata_file, gene_file, output_dir='test_output'):
     """Run scDCF on the test data"""
     try:
         import scDCF
+        from scDCF.analysis import compare_groups
         
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
@@ -67,7 +67,7 @@ def run_scDCF_test(adata_file, gene_file, output_dir='test_output'):
         
         # Load data
         adata = sc.read_h5ad(adata_file)
-        significant_genes_df = scDCF.utils.read_gene_symbols(gene_file)
+        significant_genes_df = scDCF.read_gene_symbols(gene_file)
         
         # Generate control genes
         cell_types = adata.obs['cell_type'].unique().tolist()
@@ -77,7 +77,7 @@ def run_scDCF_test(adata_file, gene_file, output_dir='test_output'):
             logging.info(f"Generating control genes for {cell_type}...")
             
             # Fixed parameter order: Now passing cell_type correctly
-            disease_control_genes, healthy_control_genes = scDCF.control_genes.generate_control_genes(
+            disease_control_genes, healthy_control_genes = scDCF.generate_control_genes(
                 adata=adata, 
                 significant_genes_df=significant_genes_df,
                 cell_type=cell_type,  # Passing a string, not DataFrame
@@ -87,7 +87,7 @@ def run_scDCF_test(adata_file, gene_file, output_dir='test_output'):
             
             # Run monte carlo comparison
             logging.info(f"Running monte carlo comparison for {cell_type}...")
-            disease_results = scDCF.analysis.monte_carlo_comparison(
+            disease_results = scDCF.monte_carlo_comparison(
                 adata=adata,
                 cell_type=cell_type,
                 cell_type_column='cell_type',
@@ -102,7 +102,7 @@ def run_scDCF_test(adata_file, gene_file, output_dir='test_output'):
                 show_progress=True
             )
             
-            healthy_results = scDCF.analysis.monte_carlo_comparison(
+            healthy_results = scDCF.monte_carlo_comparison(
                 adata=adata,
                 cell_type=cell_type,
                 cell_type_column='cell_type',
@@ -119,11 +119,11 @@ def run_scDCF_test(adata_file, gene_file, output_dir='test_output'):
             
             # Compare results
             if not disease_results.empty and not healthy_results.empty:
-                comparison = scDCF.analysis.compare_groups(disease_results, healthy_results)
+                comparison = compare_groups(disease_results, healthy_results)
                 logging.info(f"Comparison results: {comparison}")
                 
                 # Post-analysis
-                scDCF.post_analysis.visualize_combined_p_values(
+                scDCF.visualize_combined_p_values(
                     disease_results,
                     healthy_results,
                     cell_type,
@@ -150,5 +150,3 @@ if __name__ == "__main__":
         logging.info("✅ Test completed successfully!")
     else:
         logging.error("❌ Test failed!")
-
-
