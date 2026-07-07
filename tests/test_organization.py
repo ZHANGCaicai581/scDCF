@@ -1,132 +1,125 @@
 #!/usr/bin/env python
-import os
-import shutil
-import pandas as pd
+"""
+Regression tests for the public organize_output helper.
+"""
+
 import json
-import logging
+import sys
+import tempfile
+from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import pandas as pd
 
-def create_test_data():
-    """Create test data for organization testing"""
-    # Create test directory
-    if os.path.exists("test_output"):
-        shutil.rmtree("test_output")
-    os.makedirs("test_output")
-    
-    # Create cell metrics files for each cell type
-    for cell_type in ["T_cell", "B_cell", "NK_cell"]:
-        # Create cell metrics
-        cell_metrics = pd.DataFrame({
-            "cell_id": [f"cell{i}" for i in range(1, 11)],
-            "cell_type": [cell_type] * 10,
-            "t_stat": [2.5, 1.8, 2.1, 1.9, 2.3, 2.0, 1.7, 2.2, 2.4, 1.6],
-            "p_value": [0.01, 0.05, 0.03, 0.04, 0.02, 0.03, 0.06, 0.02, 0.01, 0.07],
-            # Add z-score columns
-            "disease_z_score": [0.8, 0.5, 0.7, 0.6, 0.7, 0.6, 0.5, 0.7, 0.8, 0.4],
-            "healthy_z_score": [0.2, 0.3, 0.2, 0.3, 0.2, 0.3, 0.4, 0.2, 0.2, 0.5],
-            # Add -log10 columns
-            "neg_log10_p_disease": [2.0, 1.3, 1.5, 1.4, 1.7, 1.5, 1.2, 1.7, 2.0, 1.1],
-            "neg_log10_p_healthy": [0.7, 0.5, 0.6, 0.5, 0.6, 0.5, 0.4, 0.6, 0.7, 0.3],
-            # Add trait score columns
-            "trait_age_score": [0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
-            "trait_gender_score": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
-            "trait_severity_score": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
-        })
-        
-        # Save cell metrics
-        os.makedirs(os.path.join("test_output", cell_type), exist_ok=True)
-        cell_metrics.to_csv(os.path.join("test_output", cell_type, "cell_metrics.csv"), index=False)
-        
-        # Create supporting data directory
-        supporting_dir = os.path.join("test_output", cell_type, "supporting_data")
-        os.makedirs(supporting_dir, exist_ok=True)
-        
-        # Create Monte Carlo iterations directory
-        monte_carlo_dir = os.path.join(supporting_dir, "monte_carlo_iterations")
-        os.makedirs(monte_carlo_dir, exist_ok=True)
-        
-        # Create control genes directory
-        control_genes_dir = os.path.join(supporting_dir, "control_genes")
-        os.makedirs(control_genes_dir, exist_ok=True)
-        
-        # Create disease monte carlo results
-        monte_carlo_results = pd.DataFrame({
-            "cell_id": [f"cell{i}" for i in range(1, 11)],
-            "p_value": [0.01, 0.05, 0.03, 0.04, 0.02, 0.03, 0.06, 0.02, 0.01, 0.07],
-            "t_stat": [2.5, 1.8, 2.1, 1.9, 2.3, 2.0, 1.7, 2.2, 2.4, 1.6]
-        })
-        monte_carlo_results.to_csv(os.path.join(supporting_dir, f"{cell_type}_disease_monte_carlo_results.csv"), index=False)
-        
-        # Create Monte Carlo iterations files (at least 2)
-        for i in range(1, 3):
-            monte_carlo_iter = pd.DataFrame({
-                "cell_id": [f"cell{j}" for j in range(1, 11)],
-                "p_value": [0.01, 0.05, 0.03, 0.04, 0.02, 0.03, 0.06, 0.02, 0.01, 0.07],
-                "t_stat": [2.5, 1.8, 2.1, 1.9, 2.3, 2.0, 1.7, 2.2, 2.4, 1.6]
-            })
-            monte_carlo_iter.to_csv(os.path.join(monte_carlo_dir, f"{cell_type}_disease_monte_carlo_results_iteration{i}.csv"), index=False)
-        
-        # Create trait scores
-        trait_scores = pd.DataFrame({
-            "trait": ["age", "gender", "severity"],
-            "score": [0.7, 0.3, 0.5]
-        })
-        trait_scores.to_csv(os.path.join(supporting_dir, f"{cell_type}_trait_scores.csv"), index=False)
-        
-        # Create healthy monte carlo results (if needed)
-        healthy_monte_carlo = pd.DataFrame({
-            "cell_id": [f"healthy_cell{i}" for i in range(1, 6)],
-            "p_value": [0.02, 0.04, 0.03, 0.05, 0.01],
-            "t_stat": [1.8, 1.5, 1.7, 1.4, 2.0]
-        })
-        healthy_monte_carlo.to_csv(os.path.join(supporting_dir, f"{cell_type}_healthy_monte_carlo_results.csv"), index=False)
-        
-        # Create trait association scores
-        trait_assoc = pd.DataFrame({
-            "trait": ["age", "gender", "severity"],
-            "association": [0.6, 0.4, 0.5]
-        })
-        trait_assoc.to_csv(os.path.join(supporting_dir, "trait_association_scores.csv"), index=False)
-        
-        # Create control genes JSON file
-        control_genes = {
-            "disease": ["GENE1", "GENE2", "GENE3"],
-            "healthy": ["GENE4", "GENE5", "GENE6"]
-        }
-        
-        # Save in both locations (subfolder and root for backward compatibility)
-        with open(os.path.join(control_genes_dir, f"{cell_type}_control_genes.json"), "w") as f:
-            json.dump(control_genes, f, indent=2)
-        
-        with open(os.path.join("test_output", f"{cell_type}_control_genes.json"), "w") as f:
-            json.dump(control_genes, f, indent=2)
-    
-    logging.info("Created test data in test_output directory")
-    return True
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def test_organization():
-    """Test basic organization functionality"""
-    # Create test data
-    create_test_data()
-    
-    # Use the organize_final_output function to organize the data
-    try:
-        from post_trait_test import organize_final_output
-        organize_final_output(source_dir="test_output", dest_dir="test_organized")
-    except ImportError:
-        logging.error("Could not import organize_final_output from post_trait_test")
-        return False
-    
-    # Run check_cell_metrics.py to verify the output
-    logging.info("Running check_cell_metrics.py...")
-    os.system("python check_cell_metrics.py --output_dir test_organized")
-    
-    return True
+import scDCF
+from scDCF.utils import load_control_genes
+
+
+def _write_csv(path, rows):
+    pd.DataFrame(rows).to_csv(path, index=False)
+
+
+def _build_source_tree(base_dir):
+    source_dir = Path(base_dir) / "raw_results"
+    cell_type = "T_cell"
+    cell_dir = source_dir / cell_type
+    cell_dir.mkdir(parents=True, exist_ok=True)
+
+    disease_rows = [
+        {"cell_id": "cell_1", "t_stat": 2.5, "p_value": 0.01},
+        {"cell_id": "cell_2", "t_stat": 1.8, "p_value": 0.03},
+    ]
+    healthy_rows = [
+        {"cell_id": "healthy_1", "t_stat": 0.7, "p_value": 0.42},
+        {"cell_id": "healthy_2", "t_stat": 0.9, "p_value": 0.33},
+    ]
+    trait_assoc_rows = [
+        {"cell_id": "cell_1", "disease_z_score": 1.2, "neg_log10_p_disease": 2.0},
+        {"cell_id": "cell_2", "disease_z_score": 0.8, "neg_log10_p_disease": 1.5},
+    ]
+    trait_score_rows = [{"trait": "age", "correlation": 0.7}]
+
+    _write_csv(cell_dir / f"{cell_type}_disease_monte_carlo_results.csv", disease_rows)
+    _write_csv(cell_dir / f"{cell_type}_healthy_monte_carlo_results.csv", healthy_rows)
+    _write_csv(cell_dir / f"{cell_type}_disease_monte_carlo_results_iteration1.csv", disease_rows)
+    _write_csv(cell_dir / f"{cell_type}_healthy_monte_carlo_results_iteration1.csv", healthy_rows)
+    _write_csv(cell_dir / "trait_association_scores.csv", trait_assoc_rows)
+    _write_csv(cell_dir / f"{cell_type}_trait_scores.csv", trait_score_rows)
+
+    control_genes = {
+        "disease_control_genes": {"GENE1": ["CTRL1", "CTRL2"]},
+        "healthy_control_genes": {"GENE1": ["CTRL3", "CTRL4"]},
+    }
+    with open(source_dir / f"{cell_type}_control_genes.json", "w", encoding="utf-8") as handle:
+        json.dump(control_genes, handle, indent=2)
+
+    return source_dir, cell_type, control_genes
+
+
+def run_organization_test(base_dir):
+    source_dir, cell_type, control_genes = _build_source_tree(base_dir)
+    dest_dir = Path(base_dir) / "organized_output"
+
+    returned_dir = Path(scDCF.organize_output(str(source_dir), str(dest_dir)))
+    if returned_dir != dest_dir:
+        raise AssertionError(f"Unexpected return value from organize_output: {returned_dir}")
+
+    cell_dir = dest_dir / cell_type
+    supporting_dir = cell_dir / "supporting_data"
+    iterations_dir = supporting_dir / "monte_carlo_iterations"
+    control_dir = supporting_dir / "control_genes"
+    cell_metrics_path = cell_dir / "cell_metrics.csv"
+
+    expected_paths = [
+        cell_metrics_path,
+        supporting_dir / f"{cell_type}_disease_monte_carlo_results.csv",
+        supporting_dir / f"{cell_type}_healthy_monte_carlo_results.csv",
+        iterations_dir / f"{cell_type}_disease_monte_carlo_results_iteration1.csv",
+        iterations_dir / f"{cell_type}_healthy_monte_carlo_results_iteration1.csv",
+        control_dir / f"{cell_type}_control_genes.json",
+        dest_dir / f"{cell_type}_control_genes.json",
+    ]
+    for path in expected_paths:
+        if not path.exists():
+            raise AssertionError(f"Expected organized file not found: {path}")
+
+    cell_metrics = pd.read_csv(cell_metrics_path)
+    expected_columns = {
+        "cell_id",
+        "t_stat",
+        "p_value",
+        "cell_type",
+        "disease_z_score",
+        "neg_log10_p_disease",
+        "trait_age_score",
+    }
+    missing_columns = expected_columns - set(cell_metrics.columns)
+    if missing_columns:
+        raise AssertionError(f"cell_metrics.csv missing columns: {missing_columns}")
+    if not cell_metrics["cell_type"].eq(cell_type).all():
+        raise AssertionError("cell_metrics.csv contains an unexpected cell_type value")
+    if not cell_metrics["trait_age_score"].eq(0.7).all():
+        raise AssertionError("Trait scores were not propagated into cell_metrics.csv")
+
+    disease_ctrl, healthy_ctrl = load_control_genes(control_dir / f"{cell_type}_control_genes.json")
+    if disease_ctrl != control_genes["disease_control_genes"]:
+        raise AssertionError("Disease control genes were not preserved during organization")
+    if healthy_ctrl != control_genes["healthy_control_genes"]:
+        raise AssertionError("Healthy control genes were not preserved during organization")
+
+
+def test_organize_output(tmp_path):
+    run_organization_test(tmp_path)
+
+
+def main():
+    with tempfile.TemporaryDirectory(prefix="scdcf_organize_") as tmp_dir:
+        run_organization_test(tmp_dir)
+    print("scDCF organization test passed.")
+
 
 if __name__ == "__main__":
-    success = test_organization()
-    if success:
-        logging.info("✅ Basic organization test completed successfully")
-    else:
-        logging.error("❌ Basic organization test failed")
+    main()

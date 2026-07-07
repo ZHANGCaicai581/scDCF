@@ -5,11 +5,13 @@ import subprocess
 import sys
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def run_tests():
-    """Run stable smoke tests to verify the public package workflow."""
+    """Run maintained package verification tests."""
     tests = [
-        ([sys.executable, os.path.join("tests", "test_pipeline_smoke.py")], "End-to-end pipeline smoke test")
+        ([sys.executable, os.path.join("tests", "test_pipeline_smoke.py")], "End-to-end pipeline smoke test"),
+        ([sys.executable, os.path.join("tests", "test_organization.py")], "Organized output regression test"),
     ]
     
     results = []
@@ -17,6 +19,7 @@ def run_tests():
     env.setdefault("MPLCONFIGDIR", "/private/tmp/mpl")
     env.setdefault("XDG_CACHE_HOME", "/private/tmp/cache")
     env.setdefault("NUMBA_CACHE_DIR", "/private/tmp/numba")
+    env["PYTHONPATH"] = REPO_ROOT + os.pathsep + env.get("PYTHONPATH", "")
 
     for cmd, desc in tests:
         logging.info(f"Running: {desc}")

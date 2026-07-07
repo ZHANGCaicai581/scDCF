@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scDCF"
-version = "0.1.15"
+version = "0.1.16"
 description = "A Framework for Detecting Disease-associated Cells in Single-cell RNA-seq Leveraging Healthy Reference Panels and GWAS Findings"
 readme = "README.md"
 requires-python = ">=3.9"
