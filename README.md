@@ -3,8 +3,8 @@
 *A Framework for Detecting Disease-associated Cells in Single-cell RNA-seq  
 Leveraging Healthy Reference Panels and GWAS Findings*
 
-[![PyPI version](https://img.shields.io/pypi/v/scDCF.svg)](https://pypi.org/project/scDCF/)
-[![Python versions](https://img.shields.io/pypi/pyversions/scDCF.svg)](https://pypi.org/project/scDCF/)
+[![PyPI version](https://img.shields.io/pypi/v/scdcf.svg)](https://pypi.org/project/scdcf/)
+[![Python versions](https://img.shields.io/pypi/pyversions/scdcf.svg)](https://pypi.org/project/scdcf/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -40,7 +40,7 @@ Genome-wide association studies (GWAS) have uncovered thousands of risk loci, bu
 ## 3. Installation
 ```bash
 # Install from PyPI (recommended)
-pip install scDCF
+pip install scdcf
 
 # Or install latest from GitHub
 pip install git+https://github.com/ZHANGCaicai581/scDCF.git
