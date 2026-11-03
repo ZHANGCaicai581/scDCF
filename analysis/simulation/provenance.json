@@ -1,0 +1,66 @@
+{
+  "scope": "Matched directionality analyses: Supplementary Tables S7 and S8",
+  "simulation_language": "R",
+  "author_original_generator": "scDCF_benchmarking_different_mixed_up_down_6Jan.R",
+  "author_original_generator_sha256": "2e1984588c3beb5b83ccf5770ca87291935d80da8a6c2dde62c15f9f0ea67297",
+  "unchanged_R_helpers": [
+    "mkdirp",
+    "clip",
+    "apply_celltype_baseline",
+    "build_gene_sets"
+  ],
+  "generation_changes": "Bundled original helper functions; portable paths and cache validation. Sampling and perturbation calculations are unchanged.",
+  "excluded_original_grid": "T2_mixed10down_clean_dense was named 10% down but mixed_frac_up=0.70 gives 30% down. It is not used here.",
+  "reference_seed": 46,
+  "R": {
+    "R": "4.2.2",
+    "splatter": "1.22.1",
+    "SingleCellExperiment": "1.20.1",
+    "Matrix": "1.6-5",
+    "jsonlite": "2.0.0",
+    "Seurat": "4.4.0",
+    "SeuratObject": "5.2.0",
+    "AUCell": "1.20.2",
+    "VAM": "1.1.0",
+    "matrixStats": "1.5.0"
+  },
+  "python_scDCF": {
+    "Python": "3.12",
+    "numpy": "1.26.4",
+    "pandas": "2.3.1",
+    "scipy": "1.16.3",
+    "scikit-learn": "1.8.0",
+    "anndata": "0.9.2",
+    "scanpy": "1.9.8",
+    "numba": "0.63.1",
+    "matplotlib": "3.10.5",
+    "seaborn": "0.13.2",
+    "statsmodels": "0.14.6",
+    "tqdm": "4.67.3",
+    "h5py": "3.15.1"
+  },
+  "python_scDRS": {
+    "scdrs": "1.0.2",
+    "numpy": "1.26.4",
+    "pandas": "2.2.3",
+    "scipy": "1.16.3",
+    "anndata": "0.12.7",
+    "scanpy": "1.11.5"
+  },
+  "scDCF_source_sha256": {
+    "scDCF/trait_association.py": "0e88453139647f567f7d5a321ddfa0cccbc22f68ed366d1fef221571da33e13f",
+    "scDCF/analysis.py": "0cdb1819dd3f77ef23078732fe628e47ae78b61060933f7483d4c7a2b08f9ff4",
+    "scDCF/cell_metadata.py": "22061a549fc740718729f52f6741a3aa3e5e62a67788e05a7488d593046786c2",
+    "scDCF/control_genes.py": "7ba2a055393cd3d826f543b7ca1daf9399d2079f1bf8303729715f109c73b08b",
+    "scDCF/post_analysis.py": "aee5b9a15ea0b335e5381982ebad2bb0d5b6b95a44ad6bce89bec2aa459e8d08",
+    "scDCF/__init__.py": "78abac23f31e989210317957f09b38531fb262b0835f215d379fb17669b162ac",
+    "scDCF/utils.py": "495c2a6dc16c95b0f6ffd7369b333bba8475f88a2a7542c22432c42c384ae212",
+    "scDCF/main.py": "db4c3a6209b75984c1cf0449ef30c980886832eb843fd394d8340c5c558ae5d7",
+    "scDCF/parallel.py": "565afaf81e9db79d6f8eb3fd8cdc54fdc7fc1364166eb3de15f51b244472bbbd",
+    "scDCF/__main__.py": "55d870f180352b7c0f3256c94182f95aabd1cc0295799d7a9994053bd551982a",
+    "scDCF/dependencies.py": "9d064d413b2f7aba0bf1af846c5339c09d92b8bb1e9c6a0e9186aecbe35b366a"
+  },
+  "scope_limit": "This package does not reproduce the historical Groups A-H grid or the real-data analyses.",
+  "scDCF_package_metadata_version": "0.1.15",
+  "source_identity_note": "Local source snapshot identified by SHA-256; no new release tag is asserted."
+}
