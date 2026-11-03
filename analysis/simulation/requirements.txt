@@ -1,0 +1,13 @@
+# Python 3.12 environment used for scDCF, data conversion and evaluation.
+numpy==1.26.4
+pandas==2.3.1
+scipy==1.16.3
+scikit-learn==1.8.0
+anndata==0.9.2
+scanpy==1.9.8
+numba==0.63.1
+matplotlib==3.10.5
+seaborn==0.13.2
+statsmodels==0.14.6
+tqdm==4.67.3
+h5py==3.15.1
