@@ -1,0 +1,10 @@
+{
+  "title": "scDCF: detecting disease-associated cells from scRNA-seq using GWAS findings and healthy reference panels",
+  "description": "Source code for the scDCF software framework. See the README and release notes for the contents and analysis scope of each release.",
+  "creators": [
+    {"name": "Zhang, Caicai"}
+  ],
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "mit"
+}
