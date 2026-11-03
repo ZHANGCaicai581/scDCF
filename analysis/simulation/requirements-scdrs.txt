@@ -1,0 +1,7 @@
+# Separate scDRS environment used for the saved benchmark.
+scdrs==1.0.2
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.16.3
+scanpy==1.11.5
+anndata==0.12.7
