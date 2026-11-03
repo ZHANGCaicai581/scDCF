@@ -1,0 +1,25 @@
+Validation performed on 2026-11-03
+Scope: matched directionality analyses for Supplementary Tables S7 and S8.
+
+PASS: All R scripts parse; Python scripts compile and the runner help works.
+PASS: The four reused R helper definitions match the author's original R source.
+PASS: R/Splatter generation rerun for seed 46 at 10%, 20%, 40% and 60% down.
+      All 28 compared payload files are byte-identical to the saved datasets:
+      counts, cell metadata, gene lists, causal genes, weighted input genes,
+      perturbation plans and observed-direction audits.
+PASS: Metrics recalculated from saved scores. All 20 method/scenario rows
+      (40 AUROC/AP values) match S7/S8 at four decimal places.
+PASS: Full 40%/60% count audit: 14,000 planned gene-cell pairs, 12,125 with
+      different counts and 1,875 tied after clipping/rounding. No differences
+      outside the plan; intended effects are exact sign reversals.
+PASS: All 11 scDCF source files match the hashes recorded for all four runs.
+PASS: Nine unit tests cover count support, direction, duplicate effects,
+      missing/changed metrics and full-rank enrichment versus reference AUCell.
+PASS: Cached generation is accepted only for the matching design; a conflicting
+      pair mode is rejected.
+PASS: Optional plotting script ran on saved scores; both PNGs were inspected.
+
+Validation used the existing recorded environments. Full method scoring was
+not rerun during packaging; saved scores were reused for metric validation.
+Installation into a clean environment was not tested. This analysis archive
+is separate from the scDCF software release version.
