@@ -1,0 +1,25 @@
+{
+  "title": "scDCF: matched directionality analysis code for Supplementary Tables S7–S8",
+  "version": "directionality-2026.11.03",
+  "doi": "10.5281/zenodo.23918448",
+  "description": "Analysis code for the matched 10%, 20%, 40% and 60% down-regulation experiments reported in Supplementary Tables S7–S8. Simulation uses R/Splatter. The archive contains the R generator and reference-method scorer, Python orchestration and evaluation, the scDCF source snapshot identified in provenance.json, reference metrics, environment requirements and validation notes. It excludes the historical Groups A–H benchmark, real-data analyses, generated matrices and cached scores. The analysis archive version is separate from the included scDCF package's historical version metadata. Full method scoring and clean-environment installation were not rerun during packaging; validation details are included in VALIDATION.txt.",
+  "creators": [
+    {"name": "Zhang, Caicai"}
+  ],
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "mit",
+  "keywords": ["scDCF", "single-cell RNA-seq", "simulation", "Splatter", "reproducibility"],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ZHANGCaicai581/scDCF",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "10.5281/zenodo.18409083",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ]
+}
